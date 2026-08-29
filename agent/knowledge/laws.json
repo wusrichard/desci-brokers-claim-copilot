@@ -1,0 +1,29 @@
+{
+  "meta": {
+    "kb_version": "尚未建立",
+    "downloaded_at": "",
+    "sources": [
+      "全國法規資料庫 https://law.moj.gov.tw/",
+      "政府資料開放平臺 https://data.gov.tw/"
+    ],
+    "rules": [
+      "text 欄位一律逐字貼原文，不要改寫、不要摘要——改寫過的條文不能當出處",
+      "article 要精確到條號，這是「有來源」的實體",
+      "effective 標明施行日期，法規會修正",
+      "填不確定的內容，寧可留空。空著比錯著好"
+    ]
+  },
+  "entries": [
+    {
+      "id": "TEMPLATE-請複製這一筆再填",
+      "law": "（法規全名，例：勞工職業災害保險及保護法）",
+      "article": "（條號，例：第 XX 條）",
+      "effective": "（施行日期 YYYY-MM-DD）",
+      "text": "（條文原文，逐字貼上。這一格沒填之前，程式不會引用這筆。）",
+      "applies_when": ["（適用情境關鍵字，例：職業傷害）", "（例：門診治療）"],
+      "benefit": "（這條對應什麼給付，例：醫療費用給付）",
+      "verified_by": "（查證者姓名）",
+      "verified_at": "（查證日期）"
+    }
+  ]
+}

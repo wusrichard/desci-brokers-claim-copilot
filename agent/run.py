@@ -174,6 +174,26 @@ def cmd_audit(args) -> int:
     return 0
 
 
+def cmd_kb(args) -> int:
+    """知識庫狀態：填了幾筆、版本、雜湊。交件前確認引用出處是真的。"""
+    from trustagent import knowledge
+    c.header("知識庫狀態", "本地、版本化、可重算雜湊")
+    ready = False
+    for s in knowledge.status():
+        c.kv(s["name"], "已填 {} 筆｜版本 {}".format(s["filled"], s["version"]))
+        c.kv("  sha256", s["sha256"])
+        ready = ready or s["ready"]
+    print()
+    if ready:
+        c.verdict(True, "知識庫可引用，match_coverage 會輸出真實出處")
+    else:
+        c.verdict(False, "知識庫尚未填入條文——citations 會是空的")
+        c.note("填 knowledge/laws.json，複製 TEMPLATE 那筆再改")
+        c.note("text 要逐字貼原文；填不確定的寧可留空，空著比錯著好")
+    print()
+    return 0
+
+
 def cmd_llm(args) -> int:
     """檢查金鑰有沒有生效，並實際跑一次越南文抽取。
 
@@ -342,6 +362,7 @@ def main() -> int:
 
     sub.add_parser("claim", help="理賠主線：六步流程 + 仲介授權（錄影用）")
     sub.add_parser("llm", help="檢查 API 金鑰與模型抽取是否正常")
+    sub.add_parser("kb", help="檢查知識庫狀態與雜湊")
     sub.add_parser("demo", help="六項信任機制演示")
     sub.add_parser("tour", help="同一引擎跑多個情境，證明可換皮")
     sub.add_parser("verify", help="驗證稽核紀錄")
@@ -352,7 +373,7 @@ def main() -> int:
     args = p.parse_args()
     if getattr(args, "scenario", "health_pass") != "health_pass" and args.cmd != "tour":
         load_scenario(args.scenario)
-    cmds = {"claim": cmd_claim, "llm": cmd_llm, "demo": cmd_demo, "tour": cmd_tour,
+    cmds = {"claim": cmd_claim, "llm": cmd_llm, "kb": cmd_kb, "demo": cmd_demo, "tour": cmd_tour,
             "verify": cmd_verify, "tamper": cmd_tamper, "audit": cmd_audit}
     if args.cmd not in cmds:
         p.print_help()

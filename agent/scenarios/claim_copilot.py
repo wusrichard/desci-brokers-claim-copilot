@@ -20,8 +20,10 @@
         它沒有重算 SAID、沒有驗簽章、沒有走信任鏈、沒有查撤銷紀錄。
         真正的驗證要換成 `VleiVerifier`，由 vlei-sandbox 執行。
 
-     2. 沒有任何真實的保單或法規被比對。
-        `match_coverage()` 列出的保障項目是人工編寫的示意內容。
+     2. 保障項目清單是人工編寫的示意內容。
+        但 `match_coverage()` 的**引用出處是真的**——從本地知識庫
+        `knowledge/laws.json` 撈，並附知識庫版本與 sha256。
+        知識庫未填時 citations 為空並註明原因，**不會編造條號**。
 
      3. 身份與聘僱關係、缺件清單、案件進度、送件結果，全部是固定值。
 
@@ -56,7 +58,7 @@
 import os
 from datetime import datetime, timedelta, timezone
 
-from trustagent import llm
+from trustagent import knowledge, llm
 from trustagent import Grant, HIGH, LOW, MockVerifier, Principal, Tool
 
 CASE_ID = "WIC-2026-0826-0117"          # [假資料] 虛構案號
@@ -100,7 +102,7 @@ LOCAL_ONLY = [
 FIXTURE_NOTES = {
     "verify_employment": "回傳固定值。未實際呼叫 vLEI 驗證，聘僱關係也未查任何來源系統。",
     "understand_incident": "有金鑰時為模型即時抽取；無金鑰時退回固定值（回傳的 source 欄位會標明是哪一種）。",
-    "match_coverage": "保障項目為人工編寫示意，未比對真實保單或法規條文。",
+    "match_coverage": "保障項目為人工編寫示意；引用出處則來自本地知識庫（未填時 citations 為空，不編造條號）。",
     "list_missing_documents": "缺件清單為固定值，未與任何文件管理系統核對。",
     "track_status": "案件進度為固定值，未連接任何案件系統。",
     "build_protection_record": "紀錄內容為固定值；引用的憑證 SAID 亦為假值。",
@@ -243,18 +245,26 @@ def _fixture_extraction(lang, statement, why):
 def match_coverage():
     """3 Match — 比對職災、勞保與商業保險保障。
 
-    [假資料] 保障清單是人工編寫的示意內容，未比對任何真實保單或法規原文。
+    保障清單本身仍是人工編寫的示意內容（見 FIXTURE_NOTES）。
+    **但引用出處是真的**：從本地知識庫 `knowledge/laws.json` 撈，
+    並附上知識庫版本與 sha256，任何人都能重算確認引用的是哪一份。
 
-    ⚠️ 這裡原本寫了具體的法條條號，我已經移除——那個條號是我自己編的，
-    沒有查證過。在簡報或 Demo 裡出現未查證的法條，被評審抓到會直接失去可信度。
-    要放法條，請由團隊查證《勞工職業災害保險及保護法》原文後補上，
-    並在畫面上標明出處版本與日期。
+    知識庫還沒填條文時，citations 會是空的並註明原因——
+    **不會編造條號**。這正是先前犯過的錯：填錯的法條比留空更傷。
 
-    真實版本應該做的事：
-      - 以 RAG 檢索法規原文與保單條款，逐項附上可回溯的出處
-      - 保單資料來源需為移工本人授權範圍內的資料
+    為什麼不在這裡上網查：交件是錄影，錄影只有一次；
+    而且同一個問題不同時間得到不同答案就無法重現。
+    線上同步屬於維運排程，不屬於推論路徑（見 knowledge/VERSION.md）。
     """
-    return {
+    kbs = knowledge.load_all()
+    keywords = ["職業傷害", "職災", "門診治療", "住院", "醫療費用"]
+
+    citations = []
+    for kb in kbs.values():
+        for entry in kb.find(keywords):
+            citations.append(kb.cite(entry))
+
+    result = {
         "matched": [
             {"scheme": "勞保職災醫療給付", "status": "適用", "note": "門診／住院醫療費用"},
             {"scheme": "勞保職災傷病給付", "status": "適用", "note": "不能工作期間的薪資補償"},
@@ -262,8 +272,18 @@ def match_coverage():
             {"scheme": "健保", "status": "部分適用", "note": "職災優先由職災保險給付"},
         ],
         "not_matched": [{"scheme": "商業失能險", "reason": "未達失能等級"}],
-        "citation_note": "[假資料] 法條與條款出處待團隊查證後補上，目前刻意留空",
+        "citations": citations,
     }
+
+    if not citations:
+        result["citation_note"] = (
+            "[假資料] 知識庫尚未填入條文（knowledge/laws.json）。"
+            "刻意不編造條號——填錯的法條比留空更傷。"
+        )
+    else:
+        result["citation_source"] = "本地知識庫 v{}（離線，可重現）".format(
+            kbs["laws"].version)
+    return result
 
 
 def list_missing_documents():
