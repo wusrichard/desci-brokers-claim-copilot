@@ -58,7 +58,7 @@
 import os
 from datetime import datetime, timedelta, timezone
 
-from trustagent import knowledge, llm
+from trustagent import knowledge, llm, sandbox_state
 from trustagent import Grant, HIGH, LOW, MockVerifier, Principal, Tool
 
 CASE_ID = "WIC-2026-0826-0117"          # [假資料] 虛構案號
@@ -77,13 +77,18 @@ HOSPITAL_LEI = "8945001XYZTAIWAN0024"   # [假資料] 沿用原情境包，檢�
 INSURER_NAME = "富邦人壽"
 INSURER_LEI = "8945003FUBONLIFE0T38"    # [假資料] 虛構法人，檢查碼有效
 
-# ✅ 真的 SAID —— 由 vlei-sandbox 的 `issue` 指令實際產生。
-# 信任鏈：GLEIF → QVI → 宏泰人力仲介 LE → 承辦人 ECR。
-# 林志豪的 ECR 已用 `revoke` 撤銷（模擬離職），驗證時整條鏈會斷。
-# 重建方式見 ../vlei-sandbox/，或 agent/README.md 的「重建憑證鏈」。
-AGENCY_LE_SAID = "FJVxCV4Q6cnYBpzMFpNGcOR3S0GHr7VHW5P7K-lh3w3C"
-ECR_ACTIVE = "FE0cGyO291Ljq9OwVUsmPtWk-zY1c9QKRNM0J_OslfQE"    # 陳美玲，在職
-ECR_REVOKED = "FOWvN6Yzq-XhDSQZx5bgL9k3SvgX65wesZF2RUBfeqWa"    # 林志豪，已撤銷
+# 憑證 SAID 不寫死——執行期從 vlei-sandbox 的狀態檔讀當前值。
+#
+# 原因：SAID 是內容雜湊，內容含發行者 AID，AID 又來自建鏈當下新生成的金鑰，
+# 所以每個人重建憑證鏈都會得到不同的 SAID。而含私鑰種子的 .vlei/state.json
+# 永遠不能 commit，於是 SAID 沒辦法共用——寫死就會人人衝突。
+#
+# 依「姓名」與「撤銷狀態」查詢，不依位置或字面值，所以誰建的鏈都對得上。
+# 找不到 sandbox 時回傳 None，build_verifier() 會退回 mock 並在畫面標明。
+AGENCY_LE_SAID = sandbox_state.find_by_type("le")
+ECR_ACTIVE = sandbox_state.find_ecr(person="陳美玲", revoked=False)
+ECR_REVOKED = sandbox_state.find_ecr(person="林志豪", revoked=True)
+
 HEALTHPASS_SAID = "EHp0142_healthpass_acdc_said"
 DIAGNOSIS_SAID = "EDiag_0826_acdc_said"
 

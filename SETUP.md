@@ -101,28 +101,29 @@ echo "林志豪 ECR: $LIN"
 
 ---
 
-## ⚠️ 目前已知的坑：SAID 每次重建都會變
+## SAID 每次重建都會變——但程式會自己跟上
 
-上面那段指令**每跑一次就產生一組新的 SAID**。
-但 `agent/scenarios/claim_copilot.py` 裡的 `ECR_ACTIVE` / `ECR_REVOKED`
-是語復那台機器建鏈時寫死的值。
+上面那段指令**每跑一次就產生一組新的 SAID**。這是設計使然：
+SAID 是內容雜湊，內容含發行者 AID，AID 又來自建鏈當下新生成的金鑰。
 
-**所以你自己建完鏈之後，程式碼裡那組對不上你的 sandbox，驗證會失敗。**
-錯誤訊息只會說驗證沒過，不會告訴你是這個原因。
+而 `.vlei/state.json` 含私鑰種子，**永遠不能 commit**——
+一個以「可信任」為題的作品，repo 裡放私鑰會直接自打嘴巴。
 
-**暫時的解法**：把上面印出來的兩個 SAID 貼進 `agent/scenarios/claim_copilot.py`：
+所以 SAID 沒辦法共用。**解法是程式碼裡不寫 SAID**：
+`claim_copilot.py` 執行期從 sandbox 狀態檔讀，依「姓名」與「撤銷狀態」查詢。
 
-```python
-ECR_ACTIVE  = "你剛剛印出來的 陳美玲 ECR"
-ECR_REVOKED = "你剛剛印出來的 林志豪 ECR"
+**你什麼都不用改。** 建完鏈直接跑就對得上，也不會跟別人的值衝突。
+
+想確認讀到什麼：
+
+```bash
+cd agent && python3 -c "
+import sys; sys.path.insert(0,'.')
+from trustagent import sandbox_state as st
+for c in st.credentials():
+    print('%-4s %s %s' % (c['type'], c['person'] or '-', '已撤銷' if c['revoked'] else '有效'))
+"
 ```
-
-改完**不要 commit 這兩行**，否則會蓋掉別人的值。
-
-> **待處理**：正確做法是讓程式自動從 sandbox 讀當前 SAID，而不是寫死。
-> 改一個函式就好，還沒動。要動之前跟語復講一聲，避免兩個人同時改同一個檔案。
-
----
 
 ## 怎麼確認自己跑到「完整版」
 
