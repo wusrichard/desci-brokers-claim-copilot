@@ -63,8 +63,19 @@ async function act(tool,args={},confirmed=false){
   catch(err){showResult({allowed:false,code:'REQUEST_FAILED',reason:err.message});}
 }
 function showResult(r){
-  const value=r.value?`<pre>${escapeHtml(JSON.stringify(r.value,null,2))}</pre>`:'';const fixture=r.fixture_note?`<p><small>資料來源：${escapeHtml(r.fixture_note)}</small></p>`:'';
-  $('#action-result').innerHTML=`<div class="result-box ${r.allowed?'':'blocked'}"><h4>${r.allowed?'✓ 已允許':'✕ 已阻擋'} · ${escapeHtml(r.code||'')}</h4><p>${escapeHtml(r.reason||'')}</p>${value}${fixture}</div>`;
+  // 引用出處另外渲染——埋在 JSON 裡沒人會讀，而「有來源」正是要展示的東西
+  const cites=(r.value&&r.value.citations)||[];
+  const citeHtml=cites.length?`<div class="citations"><h5>引用出處　<em>${escapeHtml((r.value&&r.value.citation_source)||'')}</em></h5>${
+    cites.map(c=>`<div class="cite"><strong>${escapeHtml(c.source||'')}</strong><span>${
+      c.effective?`施行 ${escapeHtml(c.effective)}　`:''}知識庫 ${escapeHtml(c.kb_version||'')}　sha ${escapeHtml(c.kb_sha256||'')}</span></div>`).join('')
+  }<p class="cite-note">本地知識庫，離線可重現；sha256 可重算比對。</p></div>`:'';
+  // citations 已單獨呈現，JSON 區塊就不再重複
+  const shown=r.value?Object.fromEntries(Object.entries(r.value).filter(([k])=>k!=='citations'&&k!=='citation_source')):null;
+  const value=shown&&Object.keys(shown).length?`<pre>${escapeHtml(JSON.stringify(shown,null,2))}</pre>`:'';
+  const fixture=r.fixture_note?`<p><small>資料來源：${escapeHtml(r.fixture_note)}</small></p>`:'';
+  $('#action-result').innerHTML=`<div class="result-box ${r.allowed?'':'blocked'}"><h4>${r.allowed?'✓ 已允許':'✕ 已阻擋'} · ${escapeHtml(r.code||'')}</h4><p>${escapeHtml(r.reason||'')}</p>${citeHtml}${value}${fixture}</div>`;
+  // 結果印在摺線以下，點完看似沒反應——捲過去，錄影時張力才不會斷
+  $('#action-result').scrollIntoView({behavior:'smooth',block:'nearest'});
 }
 async function loadAudit(){
   if(!state.caseId)return;try{const d=await api(`/cases/${state.caseId}/audit`);const v=d.verify;$('#audit-summary').innerHTML=`<div class="${v.ok?'audit-pass':'audit-fail'}">${v.ok?'✓':'✕'} ${escapeHtml(v.message)}</div>`;$('#audit-body').innerHTML=d.entries.map(e=>`<tr><td>${e.seq}</td><td>${e.ts.slice(11,19)}</td><td>${escapeHtml(e.principal)}</td><td>${escapeHtml(e.tool)}</td><td class="${e.allowed?'decision-ok':'decision-no'}">${escapeHtml(e.code)}</td><td><code>${e.hash.slice(0,12)}…</code></td></tr>`).join('')||'<tr><td colspan="6">尚無紀錄</td></tr>';}
