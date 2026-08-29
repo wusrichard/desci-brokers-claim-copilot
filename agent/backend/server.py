@@ -28,7 +28,9 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Response
 from fastapi.middleware.cors import CORSMiddleware
-from pydantic import BaseModel
+from fastapi.responses import FileResponse
+from fastapi.staticfiles import StaticFiles
+from pydantic import BaseModel, Field
 
 from scenarios import claim_copilot
 
@@ -42,6 +44,8 @@ from .identity import (
 )
 
 app = FastAPI(title="Verifiable Migrant Claims — 後端骨架", version="0.1.0")
+FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
+app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"],          # demo 用;上線要收斂成前端網域
@@ -107,7 +111,7 @@ class GrantIn(BaseModel):
 
 class ActIn(BaseModel):
     tool: str
-    args: dict = {}
+    args: dict = Field(default_factory=dict)
     confirmed: bool = False
 
 
@@ -222,15 +226,39 @@ def _load_grant(conn, case_id, user_id):
     ).fetchone()
 
 
+def _ensure_case_access(conn, case_id, user):
+    case = _load_case(conn, case_id)
+    grant = _load_grant(conn, case_id, user["id"])
+    if grant is None and case["worker_user_id"] != user["id"]:
+        raise HTTPException(403, "你在這個案件沒有任何授權")
+    return case, grant
+
+
+@app.get("/cases")
+def list_cases(user: dict = Depends(current_user)):
+    """列出本人擁有或已獲授權的案件，供登入後的案件選單使用。"""
+    conn = get_conn()
+    try:
+        rows = conn.execute(
+            "SELECT DISTINCT c.*, CASE WHEN c.worker_user_id=? THEN 1 ELSE 0 END AS is_owner "
+            "FROM cases c LEFT JOIN grants g ON g.case_id=c.id "
+            "WHERE c.worker_user_id=? OR g.user_id=? ORDER BY c.created_at DESC",
+            (user["id"], user["id"], user["id"]),
+        ).fetchall()
+        return [{
+            "case_id": row["id"], "title": row["title"], "status": row["status"],
+            "created_at": row["created_at"], "is_owner": bool(row["is_owner"]),
+        } for row in rows]
+    finally:
+        conn.close()
+
+
 @app.get("/cases/{case_id}")
 def get_case(case_id: str, user: dict = Depends(current_user)):
     """案件詳情 + 我在這個案件能做/不能做什麼(直接餵前端畫面)。"""
     conn = get_conn()
     try:
-        case = _load_case(conn, case_id)
-        grant = _load_grant(conn, case_id, user["id"])
-        if grant is None and case["worker_user_id"] != user["id"]:
-            raise HTTPException(403, "你在這個案件沒有任何授權")
+        case, grant = _ensure_case_access(conn, case_id, user)
 
         scopes = set(grant["scopes"].split(",")) if grant and grant["scopes"] else set()
         revoked = bool(grant and grant["revoked_at"])
@@ -249,6 +277,7 @@ def get_case(case_id: str, user: dict = Depends(current_user)):
             "case_id": case["id"],
             "title": case["title"],
             "status": case["status"],
+            "verifier": claim_copilot.build_verifier().name,
             "acting_as": {
                 "display_name": user["display_name"],
                 "acting_for": user["acting_for"],
@@ -300,10 +329,7 @@ def act(case_id: str, body: ActIn, user: dict = Depends(current_user)):
     """一次動作 = 過政策閘 + 寫稽核鏈。引擎邏輯完全沿用 TrustAgent.act()。"""
     conn = get_conn()
     try:
-        case = _load_case(conn, case_id)
-        grant = _load_grant(conn, case_id, user["id"])
-        if grant is None and case["worker_user_id"] != user["id"]:
-            raise HTTPException(403, "你在這個案件沒有任何授權")
+        case, grant = _ensure_case_access(conn, case_id, user)
 
         agent = build_agent(conn, case_id, user, grant)
         try:
@@ -329,8 +355,8 @@ def act(case_id: str, body: ActIn, user: dict = Depends(current_user)):
 def get_audit(case_id: str, user: dict = Depends(current_user)):
     conn = get_conn()
     try:
-        _load_case(conn, case_id)
-        agent = build_agent(conn, case_id, user, _load_grant(conn, case_id, user["id"]))
+        _, grant = _ensure_case_access(conn, case_id, user)
+        agent = build_agent(conn, case_id, user, grant)
         ok, bad, msg = agent.audit.verify()
         return {
             "entries": agent.audit.to_dicts(),
@@ -345,8 +371,8 @@ def get_audit(case_id: str, user: dict = Depends(current_user)):
 def verify_audit(case_id: str, user: dict = Depends(current_user)):
     conn = get_conn()
     try:
-        _load_case(conn, case_id)
-        agent = build_agent(conn, case_id, user, _load_grant(conn, case_id, user["id"]))
+        _, grant = _ensure_case_access(conn, case_id, user)
+        agent = build_agent(conn, case_id, user, grant)
         ok, bad, msg = agent.audit.verify()
         return {"ok": ok, "bad_seq": bad, "message": msg}
     finally:
@@ -358,8 +384,10 @@ def tamper_audit(case_id: str, body: TamperIn, user: dict = Depends(current_user
     """demo 專用:故意改一筆,證明 verify 會抓到。上線要拿掉整個端點。"""
     conn = get_conn()
     try:
-        _load_case(conn, case_id)
-        agent = build_agent(conn, case_id, user, _load_grant(conn, case_id, user["id"]))
+        case, grant = _ensure_case_access(conn, case_id, user)
+        if case["worker_user_id"] != user["id"]:
+            raise HTTPException(403, "只有案件當事人能執行竄改示範")
+        agent = build_agent(conn, case_id, user, grant)
         done = agent.audit.tamper(body.seq, body.field, body.value)
         if not done:
             raise HTTPException(400, "改不動:seq 不存在或欄位不允許")
@@ -396,4 +424,16 @@ def revoke_grant(grant_id: str, user: dict = Depends(current_user)):
 
 @app.get("/")
 def root():
-    return {"service": "verifiable-migrant-claims backend skeleton", "docs": "/docs"}
+    return FileResponse(os.path.join(FRONTEND_DIR, "index.html"))
+
+
+@app.get("/api/status")
+def api_status():
+    verifier = claim_copilot.build_verifier()
+    return {
+        "service": "Verifiable Migrant Claims",
+        "version": app.version,
+        "verifier": verifier.name,
+        "sandbox_cryptography": verifier.name == "vlei-sandbox",
+        "production_vlei": False,
+    }

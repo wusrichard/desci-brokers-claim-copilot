@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Claim Copilot｜移工職災理賠</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div id="toast" class="toast" role="status" aria-live="polite"></div>
+  <section id="login-view" class="login-shell">
+    <div class="login-copy">
+      <div class="eyebrow">DeSci Brokers · Trustworthy AI</div>
+      <h1>Claim Copilot</h1>
+      <p class="hero-copy">讓移工看懂保障、備齊文件，也讓每一次代理、授權與撤銷都有證據。</p>
+      <div class="trust-line"><span>AI</span> 理解語言 <i></i><span>vLEI</span> 證明授權 <i></i><span>Human</span> 確認送件</div>
+    </div>
+    <div class="login-card">
+      <p class="step-label">選擇 Demo 身分</p>
+      <div id="demo-accounts" class="account-list"></div>
+      <p class="fine-print">合成資料原型 · 密碼均為 demo1234</p>
+    </div>
+  </section>
+
+  <div id="app-view" class="app-shell hidden">
+    <aside class="sidebar">
+      <div>
+        <div class="brand-mark">DC</div>
+        <div class="brand-title">Claim Copilot</div>
+        <div class="brand-sub">Verifiable Migrant Claims</div>
+      </div>
+      <nav>
+        <button class="nav-item active" data-tab="workflow">理賠流程</button>
+        <button class="nav-item" data-tab="delegation">代理與授權</button>
+        <button class="nav-item" data-tab="audit">稽核紀錄</button>
+      </nav>
+      <div class="sidebar-bottom">
+        <a href="/docs" target="_blank">API 文件 ↗</a>
+        <button id="logout" class="link-button">切換身分</button>
+      </div>
+    </aside>
+
+    <main>
+      <header class="topbar">
+        <div>
+          <div id="case-kicker" class="eyebrow">案件</div>
+          <h2 id="case-title">載入中…</h2>
+        </div>
+        <div class="top-actions">
+          <span id="verifier-badge" class="badge">Verifier</span>
+          <select id="case-select" aria-label="選擇案件"></select>
+          <div id="user-chip" class="user-chip"></div>
+        </div>
+      </header>
+
+      <section id="principal-banner" class="principal-banner"></section>
+
+      <section id="workflow-tab" class="tab-panel">
+        <div class="section-heading">
+          <div><p class="step-label">CLAIM JOURNEY</p><h3>六步理賠流程</h3></div>
+          <p>每個動作先驗代理關係，再檢查撤銷、期限、範圍與風險。</p>
+        </div>
+        <div id="workflow-grid" class="workflow-grid"></div>
+        <div class="split-panel">
+          <article class="panel">
+            <div class="panel-title"><h3>不可逆動作</h3><span class="risk-dot">需本人確認</span></div>
+            <p>Agent 可以完成準備，但正式送件前必須停下來。</p>
+            <button id="submit-claim" class="primary danger">正式送出理賠申請</button>
+          </article>
+          <article class="panel result-panel">
+            <div class="panel-title"><h3>執行結果</h3><button id="clear-result" class="link-button">清除</button></div>
+            <div id="action-result" class="empty-state">選擇上方任一步驟開始。</div>
+          </article>
+        </div>
+      </section>
+
+      <section id="delegation-tab" class="tab-panel hidden">
+        <div class="section-heading">
+          <div><p class="step-label">ORGANIZATION → PERSON</p><h3>誰真的有權代表公司？</h3></div>
+          <p>公司存在，不等於眼前這個人仍被授權處理案件。</p>
+        </div>
+        <div class="delegation-grid">
+          <article class="person-card valid">
+            <span class="status-pill ok">ECR 有效</span><h3>陳美玲</h3><p>宏泰人力仲介 · 理賠承辦人</p>
+            <code id="active-said">載入中…</code>
+            <button class="primary officer-test" data-email="meiling@hongtai.tw">以此身分登入測試</button>
+          </article>
+          <article class="person-card revoked">
+            <span class="status-pill no">ECR 已撤銷</span><h3>林志豪</h3><p>宏泰人力仲介 · 前理賠承辦人</p>
+            <code id="revoked-said">載入中…</code>
+            <button class="secondary officer-test" data-email="zhihao@hongtai.tw">以此身分登入測試</button>
+          </article>
+        </div>
+        <article class="panel disclosure">
+          <strong>誠實限制</strong>
+          <p>本機 sandbox 執行 SAID 重算、Ed25519 驗簽與 TEL 撤銷檢查，但不是正式 GLEIF／QVI production 網路。vLEI 證明出處與授權，不證明理賠內容正確。</p>
+        </article>
+      </section>
+
+      <section id="audit-tab" class="tab-panel hidden">
+        <div class="section-heading">
+          <div><p class="step-label">APPEND-ONLY EVIDENCE</p><h3>可驗證稽核鏈</h3></div>
+          <div class="inline-actions"><button id="verify-audit" class="primary">驗證整條鏈</button><button id="tamper-audit" class="secondary">故意竄改一筆</button></div>
+        </div>
+        <div id="audit-summary" class="audit-summary"></div>
+        <div class="table-wrap"><table><thead><tr><th>#</th><th>時間</th><th>主體</th><th>動作</th><th>決策</th><th>Hash</th></tr></thead><tbody id="audit-body"></tbody></table></div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="confirm-dialog">
+    <form method="dialog">
+      <p class="step-label">HUMAN IN THE LOOP</p><h3>確認正式送件？</h3>
+      <p>這是不可逆動作。Agent 只有在你本人確認後才會繼續。</p>
+      <div class="dialog-actions"><button value="cancel" class="secondary">取消</button><button id="confirm-submit" value="confirm" class="primary danger">本人確認送件</button></div>
+    </form>
+  </dialog>
+  <script src="/static/app.js" defer></script>
+</body>
+</html>

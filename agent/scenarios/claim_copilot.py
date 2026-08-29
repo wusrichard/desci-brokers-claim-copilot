@@ -79,9 +79,9 @@ INSURER_LEI = "8945003FUBONLIFE0T38"    # [假資料] 虛構法人，檢查碼�
 # 信任鏈：GLEIF → QVI → 宏泰人力仲介 LE → 承辦人 ECR。
 # 林志豪的 ECR 已用 `revoke` 撤銷（模擬離職），驗證時整條鏈會斷。
 # 重建方式見 ../vlei-sandbox/，或 agent/README.md 的「重建憑證鏈」。
-AGENCY_LE_SAID = "FJVxCV4Q6cnYBpzMFpNGcOR3S0GHr7VHW5P7K-lh3w3C"
-ECR_ACTIVE = "FE0cGyO291Ljq9OwVUsmPtWk-zY1c9QKRNM0J_OslfQE"    # 陳美玲，在職
-ECR_REVOKED = "FOWvN6Yzq-XhDSQZx5bgL9k3SvgX65wesZF2RUBfeqWa"    # 林志豪，已撤銷
+AGENCY_LE_SAID = "FIeaGxRZouSynlpHPt79pDVtwg9KePhcE54VqDV4BtAL"
+ECR_ACTIVE = "FDqiCq4eedgv2Y_WwYmWCxCtf4wLGIILSK6pzJ_lRNA6"    # 陳美玲，在職
+ECR_REVOKED = "FKZrCrQoA5pb3OHU6odKoNrRaMZMbp3U1fUjVkAvq1Mk"    # 林志豪，已撤銷
 HEALTHPASS_SAID = "EHp0142_healthpass_acdc_said"
 DIAGNOSIS_SAID = "EDiag_0826_acdc_said"
 
@@ -436,7 +436,9 @@ def build_verifier():
     重算 SAID、驗簽章、檢查 LEI 檢查碼、查 TEL 撤銷狀態，並沿 edge 遞迴到信任根。
     退回 mock 時畫面會標明，不會假裝成真的驗證。
     """
-    if os.path.isdir(SANDBOX_DIR):
+    sandbox_cli = os.path.join(SANDBOX_DIR, "scripts", "vlei_sandbox.py")
+    sandbox_state = os.path.join(SANDBOX_DIR, ".vlei", "state.json")
+    if os.path.isfile(sandbox_cli) and os.path.isfile(sandbox_state):
         from trustagent import VleiVerifier
         return VleiVerifier(sandbox_dir=SANDBOX_DIR)
     return _build_mock_verifier()

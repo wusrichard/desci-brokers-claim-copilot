@@ -10,15 +10,12 @@
 
 ```bash
 cd agent
-python3 -m venv .venv-backend && source .venv-backend/bin/activate
-pip install -r backend/requirements.txt
-
-python3 -m backend.selftest          # 先確認相容性(不需要 FastAPI,17 項全 PASS)
-python3 -m backend.seed              # 建示範帳號與案件 WIC-DEMO-0001
-uvicorn backend.server:app --reload --port 8000
+./start_demo.sh
 ```
 
-互動式 API 文件:<http://localhost:8000/docs>
+前端：<http://localhost:8000>　互動式 API 文件：<http://localhost:8000/docs>
+
+完整測試與錄影操作順序見 [`../DEMO_TESTING.md`](../DEMO_TESTING.md)。
 
 示範帳號(密碼都是 `demo1234`):
 
@@ -68,6 +65,7 @@ backend/
 | `run.py` 的動作 | API |
 |---|---|
 | — 註冊 / 登入 | `POST /register`、`POST /login`、`GET /me` |
+| 登入後案件選單 | `GET /cases` |
 | `build_agent()` 內建的移工授權 | `POST /cases`(建案時自動發) |
 | 「移工授權仲介承辦人」(claim 最後兩步的前提) | `POST /cases/{id}/grants` |
 | `agent.capabilities()` 的授權內/外表格 | `GET /cases/{id}`(回 `capabilities`) |
