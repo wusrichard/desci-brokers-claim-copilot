@@ -1,0 +1,10 @@
+【送往品牌 ESG 戰情室的內容 — 去識別化聚合】
+
+供應鏈職安合規聚合狀態（不含任何個人）
+supplier: 晶宏電子二階代工廠
+health_pass_green_rate: 88%
+expiring_within_30d: 3
+red_light_cases: 1
+last_updated: 2026-08-28
+
+※ 不含任何移工姓名、證號或健檢明細。

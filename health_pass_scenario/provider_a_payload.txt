@@ -1,0 +1,13 @@
+【送往 SGS 稽核方的內容 — 已最小化】
+
+Health Pass 綠燈判定（RBA Health & Safety 查驗用）
+case_id: HP-2026-0142
+fitness_verdict: 適合高溫作業環境
+no_notifiable_disease: true
+check_date: 2026-08-20
+next_due_date: 2027-08-20
+issuing_hospital_LEI: 8945001XYZTAIWAN0042
+report_sha256: 3f1c9a...（原始報告指紋，內容未附）
+status_light: GREEN
+
+※ 本 payload 不含居留證號、X 光、B 肝、病史等任何敏感醫療資料。

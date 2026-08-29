@@ -1,0 +1,25 @@
+# APL masking plan — guided_curated_p0（人工宣告，非自動偵測）
+task_type: occupational_health_compliance
+
+# 值絕對不可出現在任何對外 payload 的欄位（留在廠內/本地）
+local_only_fields:
+  - arc_number            # 居留證號
+  - passport_number
+  - tb_xray_result        # 肺結核 X 光原始結果
+  - hbv_status            # B 肝帶原
+  - hiv_result
+  - medical_history       # 既往病史
+  - blood_pressure
+  - vision_detail
+
+# 刻意保留、讓稽核仍有用的抽象訊號
+preserved_task_signals:
+  - fitness_verdict（適合高溫作業 / 需複檢 / 不適任）
+  - check_date 與 next_due_date（到期日）
+  - hospital_LEI（發證醫院法人代碼）
+  - report_sha256（原始報告指紋，不含內容）
+  - no_notifiable_disease（無應處置傳染病：布林值）
+
+payload_routing:
+  mock_provider_a: SGS 稽核方 — 只收綠燈判定 + hash + 到期日（RBA 職安查驗用）
+  mock_provider_b: 品牌 ESG 戰情室 — 只收去識別化的聚合合規狀態（不含個人）
