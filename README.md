@@ -135,8 +135,8 @@ python3 run.py llm        # 驗證金鑰是否生效
 
 - 所有資料為**合成資料**，無任何真實醫療、金融或政府資料
 - 除母語理解外，其餘工具回傳的都是**寫死的固定值**
-- 憑證驗證目前為 **mock 模式**，未執行真正的密碼學驗證
-- SAID 為可讀假字串，非真實 CESR 編碼；LEI 為虛構法人但**檢查碼格式有效**
+- 仲介 LE／ECR 在本地 vlei-sandbox mock protocol 模式執行真實 Ed25519、SAID 與 TEL 驗證；這仍不是正式 GLEIF／QVI production 環境
+- Health Pass／診斷書 SAID 仍為可讀假字串；LEI 為虛構法人但**檢查碼格式有效**
 - **vLEI 證明的是出處與授權，不證明內容正確、也不證明企業合規**——
   GLEIF 官方文件本身就這樣寫
 

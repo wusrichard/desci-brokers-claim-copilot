@@ -20,9 +20,16 @@ config.local.*
 __pycache__/
 *.py[cod]
 .venv/
+.venv-backend/
 venv/
 *.egg-info/
 .pytest_cache/
+
+# 後端骨架的本地狀態(SQLite DB 與簽章私鑰,絕對不要進 repo)
+agent/backend/app.db
+agent/backend/app.db-wal
+agent/backend/app.db-shm
+agent/backend/.secrets/
 
 # ─────────────────────────────────────────────────────────────
 # 輸出產物

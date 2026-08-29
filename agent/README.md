@@ -110,7 +110,7 @@ Agent 結構化成 claim event 並標出信心值；低信心或高風險案件�
 
 ## 接 vLEI
 
-`verifier.py` 定義介面，目前預設 `MockVerifier`。要換成真的：
+`verifier.py` 定義介面。理賠情境會在專案根目錄找到 `vlei-sandbox` CLI 與 `.vlei/state.json` 時自動使用 `VleiVerifier`，否則降級為 `MockVerifier`。手動指定方式：
 
 ```python
 from trustagent import VleiVerifier

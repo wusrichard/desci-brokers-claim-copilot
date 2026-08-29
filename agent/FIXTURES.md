@@ -21,8 +21,9 @@
 
 ## 一句話總結
 
-執行 `python3 run.py claim` 時，**沒有任何語言模型被呼叫，也沒有任何密碼學驗證被執行**。
-所有工具函式回傳的都是寫死在程式碼裡的固定值。
+執行 `python3 run.py claim` 時，除非設定 OpenRouter 金鑰，母語理解會使用固定值；
+仲介承辦人的 LE／ECR 則由本地 vlei-sandbox 實際重算 SAID、驗 Ed25519 簽章並查 TEL。
+這是沙盒驗證，不是正式 GLEIF／QVI production 環境。其餘情境工具仍回傳固定值。
 
 程式執行時會在畫面最上方印出這段聲明，每一步也會標出該格的假資料範圍，
 所以錄影畫面本身就帶著誠實聲明。
@@ -37,7 +38,7 @@
 |---|---|---|---|
 | **母語事故理解** | `understand_incident()` | 越南文句子與抽取出的結構化欄位**都是預先寫好的字串**。沒有呼叫任何模型 | 呼叫語言模型做欄位抽取 |
 | **轉人工判斷** | `understand_incident()` | 原本的 `confidence: 0.91` 是打上去的數字，**沒有計算依據**，也沒有轉人工的實作。已移除該欄位，改為明確標注 | 用**欄位完整性**判斷，不要用分數門檻（見下方說明） |
-| **憑證驗證** | `MockVerifier` | 只是一張查表。**不重算 SAID、不驗簽章、不走信任鏈、不查撤銷紀錄** | 改用 `VleiVerifier(sandbox_dir=...)`，由 vlei-sandbox 執行 |
+| **憑證驗證** | `VleiVerifier`／`MockVerifier` | 找到 sandbox CLI 與狀態檔時執行沙盒密碼學驗證；否則明確降級為查表 | 正式環境仍須接 QVI、GLEIF root 與 KERIA／IPEX |
 | **身份與聘僱關係** | `verify_employment()` | 固定值。未驗證任何憑證，也未查任何人資或勞動部系統 | vLEI 驗法人 + 查聘僱資料來源 |
 | **保障比對** | `match_coverage()` | 保障項目為人工編寫的示意內容 | RAG 檢索法規原文與保單條款，逐項附出處 |
 | **缺件清單** | `list_missing_documents()` | 固定值 | 已上傳文件與該險種必備文件做差集 |
@@ -56,7 +57,7 @@
 
 | 項目 | 說明 |
 |---|---|
-| **SAID 字串** | `EHp0142_healthpass_acdc_said` 這類值**不是真的 SAID**。真的 SAID 是內容雜湊出來的 44 字元 CESR 編碼（例如 `EIaZ9...`）。這裡用可讀假字串是為了 demo 時看得懂誰是誰，接上 vlei-sandbox 後要換成 `issue` 實際產生的值 |
+| **SAID 字串** | 仲介 LE／ECR 使用 sandbox 實際產生的 44 字元 CESR SAID；`EHp0142_healthpass_acdc_said`、`EDiag_0826_acdc_said` 仍是可讀假字串，尚未簽發成憑證 |
 
 ### D. 已經移除的東西
 

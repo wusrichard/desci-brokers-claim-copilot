@@ -249,13 +249,19 @@ def cmd_claim(args) -> int:
             os.environ.get("OPENROUTER_MODEL") or llm.DEFAULT_MODEL)
     else:
         llm_line = "  1. 母語理解：未設定金鑰，本次使用固定值"
+    if agent.verifier is not None and agent.verifier.name == "vlei-sandbox":
+        verifier_line = "  2. vLEI：沙盒內實際重算 SAID、驗簽章並查 TEL 撤銷狀態"
+        said_line = "  4. 案號、公司與人名為合成資料；仲介 LE／ECR SAID 由本地 sandbox 產生"
+    else:
+        verifier_line = "  2. vLEI：未找到 sandbox 狀態，本次使用 MockVerifier 查表"
+        said_line = "  4. 案號、公司、人名與 SAID 為合成／模擬資料（LEI 檢查碼格式有效）"
     c.disclosure([
         "本原型除母語理解外，其餘回傳值皆為寫死的固定值：",
         "",
         llm_line,
-        "  2. 沒有執行密碼學驗證——MockVerifier 只是一張查表",
+        verifier_line,
         "  3. 沒有比對真實保單或法規條文",
-        "  4. 案號、公司、人名、SAID 全為虛構（LEI 檢查碼為有效格式）",
+        said_line,
         "",
         "每一步畫面上都會標出該格的實際來源。",
     ])

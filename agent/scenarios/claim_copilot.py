@@ -461,7 +461,9 @@ def build_verifier():
     重算 SAID、驗簽章、檢查 LEI 檢查碼、查 TEL 撤銷狀態，並沿 edge 遞迴到信任根。
     退回 mock 時畫面會標明，不會假裝成真的驗證。
     """
-    if os.path.isdir(SANDBOX_DIR):
+    sandbox_cli = os.path.join(SANDBOX_DIR, "scripts", "vlei_sandbox.py")
+    sandbox_state = os.path.join(SANDBOX_DIR, ".vlei", "state.json")
+    if os.path.isfile(sandbox_cli) and os.path.isfile(sandbox_state):
         from trustagent import VleiVerifier
         return VleiVerifier(sandbox_dir=SANDBOX_DIR)
     return _build_mock_verifier()
