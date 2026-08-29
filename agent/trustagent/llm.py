@@ -110,7 +110,37 @@ def chat_json(system, user, model=None, max_tokens=1024, timeout=40):
     except (KeyError, IndexError):
         raise LLMError("回應格式非預期：{}".format(json.dumps(payload)[:300]))
 
+    return parse_json_loose(content)
+
+
+def parse_json_loose(content):
+    """解析模型回傳的 JSON。
+
+    即使要求了 response_format=json_object，仍有模型會把 JSON 包在
+    markdown 圍籬裡（```json ... ```）。這不是模型的錯，是各家實作差異，
+    所以解析端要自己處理，不能假設回來的一定是乾淨的 JSON。
+    """
+    text = content.strip()
+
+    # 去掉 markdown 圍籬
+    if text.startswith("```"):
+        lines = text.split("\n")
+        lines = lines[1:]                       # 丟掉 ```json 那行
+        if lines and lines[-1].strip() == "```":
+            lines = lines[:-1]
+        text = "\n".join(lines).strip()
+
     try:
-        return json.loads(content)
+        return json.loads(text)
     except json.JSONDecodeError:
-        raise LLMError("模型沒有回傳合法 JSON：{}".format(content[:300]))
+        pass
+
+    # 最後一招：抓第一個 { 到最後一個 } 之間的內容
+    start, end = text.find("{"), text.rfind("}")
+    if start != -1 and end > start:
+        try:
+            return json.loads(text[start:end + 1])
+        except json.JSONDecodeError:
+            pass
+
+    raise LLMError("模型沒有回傳合法 JSON：{}".format(content[:200]))

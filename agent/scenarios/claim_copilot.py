@@ -136,7 +136,12 @@ def verify_employment():
 # 有金鑰時呼叫 OpenRouter 做真實抽取；沒有金鑰或呼叫失敗時退回固定值，
 # 並在回傳值與畫面上明確標注是哪一種——Demo Day 網路不穩不會開天窗。
 
-DEFAULT_STATEMENT = "Tôi bị máy kẹp cổ tay phải khi đang vận hành máy SMT lúc 2 giờ chiều ngày 26 tháng 8."
+# 敘述刻意寫得完整（含年份），讓「順利路徑」能一次通過。
+# 少了年份時模型會正確地回 null、規則會正確地轉人工——那是 run.py llm 第二個測試在示範的。
+DEFAULT_STATEMENT = (
+    "Ngày 26 tháng 8 năm 2026, lúc 2 giờ 20 chiều, "
+    "tôi bị máy kẹp cổ tay phải khi đang vận hành máy SMT số 3 tại nhà máy."
+)
 
 # 必填欄位。少任何一項就轉人工——用欄位完整性判斷，不用信心分數門檻。
 REQUIRED_FIELDS = ["incident_date", "body_part", "mechanism", "work_related"]
