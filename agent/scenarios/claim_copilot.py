@@ -75,12 +75,13 @@ HOSPITAL_LEI = "8945001XYZTAIWAN0024"   # [假資料] 沿用原情境包，檢�
 INSURER_NAME = "富邦人壽"
 INSURER_LEI = "8945003FUBONLIFE0T38"    # [假資料] 虛構法人，檢查碼有效
 
-# [假資料] 以下不是真的 SAID。
-# 真的 SAID 是內容雜湊出來的 44 字元 CESR 編碼字串（例如 EIaZ9...），
-# 這裡用可讀的假字串是為了 demo 時看得懂誰是誰。
-# 接上 vlei-sandbox 後，這些值要換成 `issue` 指令實際產生的 SAID。
-ECR_ACTIVE = "EAgency_chen_meiling_ecr"
-ECR_REVOKED = "EAgency_lin_zhihao_ecr"
+# ✅ 真的 SAID —— 由 vlei-sandbox 的 `issue` 指令實際產生。
+# 信任鏈：GLEIF → QVI → 宏泰人力仲介 LE → 承辦人 ECR。
+# 林志豪的 ECR 已用 `revoke` 撤銷（模擬離職），驗證時整條鏈會斷。
+# 重建方式見 ../vlei-sandbox/，或 agent/README.md 的「重建憑證鏈」。
+AGENCY_LE_SAID = "FJVxCV4Q6cnYBpzMFpNGcOR3S0GHr7VHW5P7K-lh3w3C"
+ECR_ACTIVE = "FE0cGyO291Ljq9OwVUsmPtWk-zY1c9QKRNM0J_OslfQE"    # 陳美玲，在職
+ECR_REVOKED = "FOWvN6Yzq-XhDSQZx5bgL9k3SvgX65wesZF2RUBfeqWa"    # 林志豪，已撤銷
 HEALTHPASS_SAID = "EHp0142_healthpass_acdc_said"
 DIAGNOSIS_SAID = "EDiag_0826_acdc_said"
 
@@ -423,8 +424,26 @@ def build_agency_grant(principal, days_valid=30):
     )
 
 
+SANDBOX_DIR = os.path.normpath(
+    os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "vlei-sandbox")
+)
+
+
 def build_verifier():
-    """[假資料] 回傳 MockVerifier —— 它只是一張查表，不做任何密碼學驗證。
+    """優先使用真正的 vlei-sandbox；找不到才退回 MockVerifier。
+
+    VleiVerifier 會實際執行 `vlei_sandbox.py verify --said <SAID>`，
+    重算 SAID、驗簽章、檢查 LEI 檢查碼、查 TEL 撤銷狀態，並沿 edge 遞迴到信任根。
+    退回 mock 時畫面會標明，不會假裝成真的驗證。
+    """
+    if os.path.isdir(SANDBOX_DIR):
+        from trustagent import VleiVerifier
+        return VleiVerifier(sandbox_dir=SANDBOX_DIR)
+    return _build_mock_verifier()
+
+
+def _build_mock_verifier():
+    """[假資料] 找不到 sandbox 時的退路——只是一張查表，不做任何密碼學驗證。
 
     它「不會」重算 SAID、不會驗簽章、不會走信任鏈、不會查 TEL 撤銷紀錄。
     它唯一做的事是：這個字串在不在我的字典裡、有沒有被標記為已撤銷。

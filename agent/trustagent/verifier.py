@@ -72,9 +72,28 @@ class VleiVerifier(Verifier):
                 cmd, cwd=self.sandbox_dir, capture_output=True, text=True, timeout=30
             )
         except Exception as exc:  # sandbox 沒裝好時不要讓整個 demo 掛掉
-            return VerificationResult(False, said, "", "無法呼叫 vlei-sandbox: {}".format(exc))
+            return VerificationResult(False, said, "", "無法呼叫 vlei-sandbox：{}".format(exc))
 
         out = (proc.stdout or "") + (proc.stderr or "")
-        ok = proc.returncode == 0 and "VALID" in out.upper()
-        revoked = "REVOK" in out.upper()
-        return VerificationResult(ok, said, "", out.strip()[:200], revoked=revoked)
+
+        # 判定依 RESULT 行與退出碼，不要用關鍵字比對整段輸出：
+        # 輸出裡的「LEI ...: valid (ISO 17442-1)」只代表 LEI 檢查碼合格，
+        # 不代表整條鏈驗證通過。拿 "VALID" 去 match 會把撤銷過的憑證判成有效。
+        ok = proc.returncode == 0 and "RESULT: chain verified" in out
+
+        # 撤銷要看標記 FAIL 的那一行，不是任何提到 revoke 的行
+        # （通過的憑證每一節都會印「issued, not revoked」）
+        revoked = any(
+            "[FAIL]" in line and "revoked" in line
+            for line in out.splitlines()
+        )
+
+        if revoked:
+            detail = "憑證已被撤銷，整條鏈失效"
+        elif ok:
+            detail = "信任鏈驗證通過，根為 GLEIF"
+        else:
+            fails = [ln.strip() for ln in out.splitlines() if "[FAIL]" in ln]
+            detail = fails[0] if fails else "驗證失敗（exit={}）".format(proc.returncode)
+
+        return VerificationResult(ok, said, "", detail, revoked=revoked)

@@ -270,7 +270,11 @@ def cmd_claim(args) -> int:
 
     # --- Corppass：組織對個人授權 ---
     c.header("仲介承辦人授權", "對應新加坡 Corppass：驗的不只是公司是真的，是這個人被公司授權")
-    c.fixture("撤銷判定來自 MockVerifier 的查表，非真實 TEL 撤銷紀錄")
+    _v = s.build_verifier()
+    if _v.name == "vlei-sandbox":
+        c.note(c.green("✓ 真實驗證") + "：以 vlei-sandbox 執行，重算 SAID、驗簽章、查 TEL 撤銷狀態、遞迴至信任根")
+    else:
+        c.fixture("找不到 vlei-sandbox，退回查表模式，非真實 TEL 撤銷紀錄")
 
     for revoked, label in ((False, "在職承辦人 陳美玲"), (True, "已離職承辦人 林志豪")):
         officer = s.build_agency_officer(revoked=revoked)
