@@ -1,15 +1,15 @@
 # 隊友上手指南
 
-> DeSci Brokers｜移工職災保險 Claim Copilot
-> repo：https://github.com/wusrichard/desci-brokers-claim-copilot
+> DeSci Brokers｜移工保險基礎設施 Migrant Insurance Infrastructure
+> repo：https://github.com/wusrichard/migrant-insurance-infrastructure
 
 ---
 
 ## 最快：30 秒跑起來
 
 ```bash
-git clone https://github.com/wusrichard/desci-brokers-claim-copilot
-cd desci-brokers-claim-copilot/agent
+git clone https://github.com/wusrichard/migrant-insurance-infrastructure
+cd migrant-insurance-infrastructure/agent
 python3 run.py claim
 ```
 
@@ -44,7 +44,7 @@ python3 run.py claim
 共用的話用量會混在一起，出問題也查不出是誰打的。
 
 ```bash
-cd desci-brokers-claim-copilot/agent
+cd migrant-insurance-infrastructure/agent
 cp .env.example .env
 open -e .env          # 把金鑰填在 OPENROUTER_API_KEY= 後面
 python3 run.py llm    # 驗證
@@ -66,7 +66,7 @@ python3 run.py llm    # 驗證
 並把已離職的林志豪的憑證撤銷：
 
 ```bash
-cd desci-brokers-claim-copilot
+cd migrant-insurance-infrastructure
 git clone -q --depth 1 https://github.com/smpebble/vlei-sandbox
 cd vlei-sandbox
 S=scripts/vlei_sandbox.py
@@ -110,7 +110,7 @@ SAID 是內容雜湊，內容含發行者 AID，AID 又來自建鏈當下新生�
 一個以「可信任」為題的作品，repo 裡放私鑰會直接自打嘴巴。
 
 所以 SAID 沒辦法共用。**解法是程式碼裡不寫 SAID**：
-`claim_copilot.py` 執行期從 sandbox 狀態檔讀，依「姓名」與「撤銷狀態」查詢。
+`migrant_claim.py` 執行期從 sandbox 狀態檔讀，依「姓名」與「撤銷狀態」查詢。
 
 **你什麼都不用改。** 建完鏈直接跑就對得上，也不會跟別人的值衝突。
 

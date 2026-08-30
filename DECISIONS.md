@@ -1,6 +1,6 @@
 # 討論與決策紀錄
 
-> DeSci Brokers｜移工職災保險 Claim Copilot
+> DeSci Brokers｜移工保險基礎設施 Migrant Insurance Infrastructure
 > 語復與 AI 助理的工作紀錄整理，2026-08-29。
 > 給隊友看的重點是：**哪些事情做了決定、為什麼這樣決定、以及哪些是刻意沒做的。**
 
@@ -82,10 +82,10 @@ Go 沒裝，而且 RAG 與 LLM 的生態在 Python 上快得多。
 
 | | 先前（8/25 + build/） | 現在（0829 deck） |
 |---|---|---|
-| 核心 | 職安健檢綠燈憑證 | **移工職災＋保險 Claim Copilot** |
+| 核心 | 職安健檢綠燈憑證 | **移工職災理賠（Migrant Insurance Infrastructure）** |
 | RBA 定位 | 商業價值主軸 | 企業端副產品 |
 | 角色 | 移工／醫院／稽核員 | 移工／仲介／雇主／保險／稽核，五方同案 |
-| AI 份量 | 較輕 | Multilingual Claim Copilot 排第一能力 |
+| AI 份量 | 較輕 | 多語事故理解排第一能力 |
 
 **決定**：主軸換成理賠，**健檢綠燈降級為理賠包裡的一項證據**
 （在 `build_protection_record()` 的 `evidence_credentials` 還看得到它）。
@@ -181,7 +181,7 @@ trustagent/          引擎 — 沒有一行知道「理賠」或「健檢」
   console.py         終端輸出
 
 scenarios/           情境 — 換皮只換這裡
-  claim_copilot.py   移工職災保險理賠（主線）
+  migrant_claim.py   移工職災理賠（主線）
   health_pass.py     職安健檢綠燈（現為證據之一）
   medical_claim.py   個人醫療理賠（證明可複用）
 ```
@@ -385,7 +385,7 @@ Demo Day 現場網路不穩不會讓簡報開天窗，而且退回時 `source` �
 
 | 項目 | 狀態 |
 |---|---|
-| 程式碼儲存庫 | ✅ https://github.com/wusrichard/desci-brokers-claim-copilot |
+| 程式碼儲存庫 | ✅ https://github.com/wusrichard/migrant-insurance-infrastructure |
 | README | ✅ |
 | 第三方套件授權揭露 | ✅ |
 | 合成資料聲明 | ✅ FIXTURES.md + 畫面標注 |

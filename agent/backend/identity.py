@@ -3,13 +3,13 @@
 現在的 CLI:build_principal() 永遠回傳阮氏梅,build_agency_officer() 寫死兩個人。
 後端:誰登入,Principal 就是誰;授權從 grants 表讀。
 
-情境仍然用 scenarios.claim_copilot(主線),工具、驗證器都照它的。
+情境仍然用 scenarios.migrant_claim(主線),工具、驗證器都照它的。
 """
 
 from datetime import datetime, timedelta, timezone
 
 from trustagent import Grant, Principal, TrustAgent
-from scenarios import claim_copilot
+from scenarios import migrant_claim
 
 from .audit_store import SqliteAuditLog, load_audit_key
 
@@ -57,10 +57,10 @@ def build_agent(conn, case_id: str, user_row, grant_row) -> TrustAgent:
     agent = TrustAgent(
         principal=principal,
         grant=grant,
-        verifier=claim_copilot.build_verifier(),
+        verifier=migrant_claim.build_verifier(),
         audit=SqliteAuditLog(conn, case_id, key=load_audit_key()),
     )
-    agent.register_all(claim_copilot.build_tools())
+    agent.register_all(migrant_claim.build_tools())
     return agent
 
 

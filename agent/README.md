@@ -22,7 +22,7 @@ python3 run.py claim
 | `python3 run.py tamper` | 竄改一筆後重驗 → FAIL |
 | `python3 run.py audit` | 印出稽核紀錄 JSON |
 
-主線是 **移工職災保險 Claim Copilot**（依 0829 Concept deck）。
+主線是**移工職災理賠**（Migrant Insurance Infrastructure，依 0829 Concept deck）。
 健檢綠燈已降級為理賠包裡的一項證據，不再是主軸；RBA 是企業端的副產品，不是產品定位。
 
 ---
@@ -39,7 +39,7 @@ trustagent/             引擎 — 不含任何情境知識
   agent.py              執行迴圈
   console.py            終端輸出
 scenarios/              情境 — 換皮只換這裡
-  claim_copilot.py      移工職災保險理賠（主線）
+  migrant_claim.py      移工職災理賠（主線）
   health_pass.py        職安健檢綠燈（現為理賠的證據之一）
   medical_claim.py      個人醫療理賠（證明引擎可複用）
 ```
@@ -87,7 +87,7 @@ scenarios/              情境 — 換皮只換這裡
 
 ## 六步理賠流程
 
-`Verify → Understand → Match → Claim → Track → Record`，對應 `claim_copilot.py` 的工具。
+`Verify → Understand → Match → Claim → Track → Record`，對應 `migrant_claim.py` 的工具。
 其中 **Understand** 是 AI 真正做事的一格：移工用越南文描述事故，
 Agent 結構化成 claim event 並標出信心值；低信心或高風險案件轉人工。
 
