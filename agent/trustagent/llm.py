@@ -64,7 +64,12 @@ class LLMError(Exception):
     pass
 
 
-def chat_json(system, user, model=None, max_tokens=1024, timeout=40):
+# 抽取任務的輸出很短（一個小 JSON），1024 是浪費，而且會在額度吃緊時
+# 直接吃 402——OpenRouter 是按「你要求的上限」而非實際用量來擋的。
+DEFAULT_MAX_TOKENS = 700
+
+
+def chat_json(system, user, model=None, max_tokens=DEFAULT_MAX_TOKENS, timeout=40):
     """送一次對話，要求回傳 JSON，解析後回傳 dict。
 
     失敗時拋 LLMError，由呼叫端決定要不要退回固定值。
