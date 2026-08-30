@@ -27,6 +27,7 @@ class TrustAgent:
         self.verifier = verifier
         self.audit = audit or AuditLog()
         self.tools: Dict[str, Tool] = {}
+        self._delegation_evidence: Dict[str, Any] = {}
 
     # ---- 機制 3：工具註冊 ----------------------------------------------
     def register(self, tool: Tool) -> None:
@@ -70,6 +71,7 @@ class TrustAgent:
         談授權範圍沒有意義。
         """
         p = self.principal
+        self._delegation_evidence = {}
         if not p.is_delegated:
             return None
         if self.verifier is None or not p.role_credential:
@@ -78,6 +80,20 @@ class TrustAgent:
                 "{} 宣稱代表 {}，但沒有可驗證的角色憑證".format(p.display_name, p.acting_for),
             )
         result = self.verifier.verify(p.role_credential)
+        self._delegation_evidence = {
+            "acting_for": p.acting_for,
+            "org_lei": p.org_lei,
+            "role_credential": p.role_credential,
+            "verifier": self.verifier.name,
+            "verification_detail": result.detail,
+        }
+        if result.unavailable:
+            return Decision(
+                False, Decision.VERIFIER_UNAVAILABLE,
+                "目前無法驗證 {} 代表 {} 的角色；為保護案件已拒絕代理操作：{}".format(
+                    p.display_name, p.acting_for, result.detail
+                ),
+            )
         if not result.ok:
             return Decision(
                 False, Decision.ROLE_NOT_VERIFIED,
@@ -99,7 +115,9 @@ class TrustAgent:
         if decision is not None:
             entry = self.audit.append(str(self.principal), tool_name, decision.code, False,
                                       {"reason": decision.reason,
-                                       "acting_for": self.principal.acting_for})
+                                       "acting_for": self.principal.acting_for,
+                                       "role_credential": self.principal.role_credential,
+                                       "verifier": getattr(self.verifier, "name", "none")})
             return ActionResult(tool_name, decision, None, entry.seq)
 
         decision = self.gate.check(tool, confirmed=confirmed)
@@ -109,6 +127,8 @@ class TrustAgent:
             "risk": tool.risk,
             "reason": decision.reason,
         }
+        if self._delegation_evidence:
+            detail["delegation"] = dict(self._delegation_evidence)
         if confirmed:
             detail["human_confirmed"] = True
 

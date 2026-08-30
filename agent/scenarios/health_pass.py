@@ -100,7 +100,7 @@ def read_raw_report():
     return _load_local_only()
 
 
-def share_with_new_auditor(auditor: str = "SGS-TW-0417"):
+def share_with_new_auditor(auditor: str = "EXTERNAL-REVIEWER-DEMO"):
     """授權範圍內、但高風險：把綠燈揭露給一個新的稽核方。
 
     這是不可逆動作——揭露出去就收不回來，所以即使在授權範圍內

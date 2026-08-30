@@ -8,5 +8,5 @@ uvicorn>=0.29
 # API 整合測試（FastAPI TestClient）
 httpx>=0.27
 
-# 選用:裝了才會對每筆稽核紀錄加 Ed25519 簽章。沒裝也能跑,雜湊鏈照樣防竄改。
-# cryptography>=42
+# 後端稽核鏈逐筆簽章與驗簽；不再只產生簽章卻不驗證。
+cryptography>=42

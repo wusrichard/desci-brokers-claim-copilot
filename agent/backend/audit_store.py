@@ -34,6 +34,8 @@ def load_audit_key(path: str = AUDIT_KEY_PATH):
         return None
 
     if os.path.exists(path):
+        os.chmod(os.path.dirname(path), 0o700)
+        os.chmod(path, 0o600)
         with open(path, encoding="utf-8") as fh:
             return Ed25519PrivateKey.from_private_bytes(bytes.fromhex(fh.read().strip()))
 
@@ -43,8 +45,10 @@ def load_audit_key(path: str = AUDIT_KEY_PATH):
         format=serialization.PrivateFormat.Raw,
         encryption_algorithm=serialization.NoEncryption(),
     )
-    os.makedirs(os.path.dirname(path), exist_ok=True)
-    with open(path, "w", encoding="utf-8") as fh:
+    os.makedirs(os.path.dirname(path), mode=0o700, exist_ok=True)
+    os.chmod(os.path.dirname(path), 0o700)
+    fd = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+    with os.fdopen(fd, "w", encoding="utf-8") as fh:
         fh.write(raw.hex())
     return key
 
@@ -122,13 +126,29 @@ class SqliteAuditLog:
     def verify(self):
         prev = GENESIS
         entries = self.entries
+        unsigned = 0
         for e in entries:
             if e.prev != prev:
                 return False, e.seq, "第 {} 筆的 prev 與前一筆的雜湊對不上".format(e.seq)
             if e.compute_hash() != e.hash:
                 return False, e.seq, "第 {} 筆內容被改過(雜湊重算不符)".format(e.seq)
+            if e.sig:
+                if self._key is None:
+                    return False, e.seq, "第 {} 筆有簽章，但目前無法載入驗證金鑰".format(e.seq)
+                try:
+                    self._key.public_key().verify(
+                        bytes.fromhex(e.sig), bytes.fromhex(e.hash)
+                    )
+                except Exception:
+                    return False, e.seq, "第 {} 筆 Ed25519 簽章驗證失敗".format(e.seq)
+            else:
+                unsigned += 1
             prev = e.hash
-        return True, None, "全部 {} 筆完好".format(len(entries))
+        if unsigned:
+            return True, None, "全部 {} 筆雜湊完好（{} 筆為既有未簽章紀錄）".format(
+                len(entries), unsigned
+            )
+        return True, None, "全部 {} 筆雜湊與 Ed25519 簽章完好".format(len(entries))
 
     # ---- demo 用:故意竄改一筆(只改內容、不重算雜湊)------------------
     def tamper(self, seq: int, field_name: str = "code", new_value="OK") -> bool:

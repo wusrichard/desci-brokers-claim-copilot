@@ -99,12 +99,12 @@ def cmd_demo(args) -> int:
     c.note("scope 是 raw_medical，根本不在移工勾選的範圍內——連談風險都不必")
 
     c.step(6, "機制 4 — 攔截 B：授權內、但不可逆（揭露給新稽核方）")
-    r = agent.act("share_with_new_auditor", auditor="SGS-TW-0417")
+    r = agent.act("share_with_new_auditor", auditor="EXTERNAL-REVIEWER-DEMO")
     c.blocked(r.tool, r.decision.code, r.decision.reason)
     c.note("這次 scope 通過了，但動作不可逆——揭露出去收不回來，所以仍然停下來等人")
     print()
     c.note("→ 移工在手機上按下確認後，同一個呼叫帶 confirmed=True 重送：")
-    r = agent.act("share_with_new_auditor", auditor="SGS-TW-0417", confirmed=True)
+    r = agent.act("share_with_new_auditor", auditor="EXTERNAL-REVIEWER-DEMO", confirmed=True)
     c.allowed(r.tool, r.decision.reason)
     for k, v in r.value.items():
         c.kv(k, str(v))
@@ -249,9 +249,13 @@ def cmd_claim(args) -> int:
             os.environ.get("OPENROUTER_MODEL") or llm.DEFAULT_MODEL)
     else:
         llm_line = "  1. 母語理解：未設定金鑰，本次使用固定值"
-    if agent.verifier is not None and agent.verifier.name == "vlei-sandbox":
+    verifier_name = getattr(agent.verifier, "name", "none")
+    if verifier_name == "vlei-sandbox":
         verifier_line = "  2. vLEI：沙盒內實際重算 SAID、驗簽章並查 TEL 撤銷狀態"
         said_line = "  4. 案號、公司與人名為合成資料；仲介 LE／ECR SAID 由本地 sandbox 產生"
+    elif verifier_name == "unavailable":
+        verifier_line = "  2. vLEI：嚴格模式下 Verifier 不可用，所有組織代理操作 fail closed"
+        said_line = "  4. 案號、公司、人名與 SAID 為合成資料（LEI 檢查碼格式有效）"
     else:
         verifier_line = "  2. vLEI：未找到 sandbox 狀態，本次使用 MockVerifier 查表"
         said_line = "  4. 案號、公司、人名與 SAID 為合成／模擬資料（LEI 檢查碼格式有效）"
@@ -299,6 +303,8 @@ def cmd_claim(args) -> int:
     _v = s.build_verifier()
     if _v.name == "vlei-sandbox":
         c.note(c.green("✓ 真實驗證") + "：以 vlei-sandbox 執行，重算 SAID、驗簽章、查 TEL 撤銷狀態、遞迴至信任根")
+    elif _v.name == "unavailable":
+        c.note(c.amber("⚠ Fail closed") + "：Verifier 不可用，組織代理操作全部拒絕")
     else:
         c.fixture("找不到 vlei-sandbox，退回查表模式，非真實 TEL 撤銷紀錄")
 

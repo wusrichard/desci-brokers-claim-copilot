@@ -15,6 +15,13 @@ from .audit_store import SqliteAuditLog, load_audit_key
 
 WORKER_SCOPES = {"claim_prep", "employer_record"}   # 移工本人的預設授權
 COLLAB_SCOPES = {"claim_prep"}                      # 協作者(仲介承辦人)預設較窄
+EMPLOYER_SCOPES = {                                  # 雇主只處理公司掌握的資料
+    "employment_confirm",
+    "employer_evidence",
+    "employer_insurance",
+    "case_status_limited",
+}
+DELEGATABLE_SCOPES = {"claim_prep"}                # 只委派理賠協作；操作紀錄限本人
 
 
 def _parse_dt(text):
@@ -25,7 +32,7 @@ def _parse_dt(text):
 
 
 def principal_from_user(row) -> Principal:
-    """agency_officer 會帶 acting_for / org_lei / role_credential → 觸發代理關係驗證。"""
+    """組織承辦人會帶 acting_for / org_lei / ECR → 每次操作先驗代理關係。"""
     return Principal(
         id="{}:{}".format(row["role"], row["id"]),
         display_name=row["display_name"],

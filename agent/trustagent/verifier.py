@@ -7,10 +7,8 @@ MockVerifier   跑得動、不用裝東西，用來先把 Agent 骨架串起來�
 VleiVerifier   實際呼叫 vlei-sandbox 的 `verify --said`，Day 2 換上去。
 """
 
-import json
 import subprocess
 from dataclasses import dataclass
-from typing import Optional
 
 
 @dataclass
@@ -20,6 +18,7 @@ class VerificationResult:
     issuer: str = ""
     detail: str = ""
     revoked: bool = False
+    unavailable: bool = False
 
 
 class Verifier:
@@ -29,6 +28,20 @@ class Verifier:
 
     def verify(self, said: str) -> VerificationResult:  # pragma: no cover - 介面
         raise NotImplementedError
+
+
+class UnavailableVerifier(Verifier):
+    """Fail-closed verifier：環境要求可信驗證，但驗證服務目前不可用。"""
+
+    name = "unavailable"
+
+    def __init__(self, detail: str) -> None:
+        self.detail = detail
+
+    def verify(self, said: str) -> VerificationResult:
+        return VerificationResult(
+            False, said, "", self.detail, unavailable=True
+        )
 
 
 class MockVerifier(Verifier):
@@ -71,8 +84,10 @@ class VleiVerifier(Verifier):
             proc = subprocess.run(
                 cmd, cwd=self.sandbox_dir, capture_output=True, text=True, timeout=30
             )
-        except Exception as exc:  # sandbox 沒裝好時不要讓整個 demo 掛掉
-            return VerificationResult(False, said, "", "無法呼叫 vlei-sandbox：{}".format(exc))
+        except Exception as exc:  # 嚴格模式由 Agent 將 unavailable 視為 fail closed
+            return VerificationResult(
+                False, said, "", "無法呼叫 vlei-sandbox：{}".format(exc), unavailable=True
+            )
 
         out = (proc.stdout or "") + (proc.stderr or "")
 

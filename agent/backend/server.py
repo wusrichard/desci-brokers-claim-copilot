@@ -26,33 +26,60 @@ from datetime import datetime, timezone
 # 允許 `uvicorn backend.server:app` 從 agent/ 目錄啟動時找到 trustagent / scenarios
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Response
+from fastapi import Cookie, Depends, FastAPI, Header, HTTPException, Request, Response
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, JSONResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
 from scenarios import migrant_claim
 
 from . import auth
+from . import security
 from .db import get_conn, init_db
 from .identity import (
     COLLAB_SCOPES,
+    DELEGATABLE_SCOPES,
     WORKER_SCOPES,
     build_agent,
     default_expiry,
 )
 
 app = FastAPI(title="Migrant Insurance Infrastructure — 後端骨架", version="0.1.0")
+ACTIVE_ROLES = {"worker", "agency_officer", "employer_officer"}
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],          # demo 用;上線要收斂成前端網域
-    allow_methods=["*"],
-    allow_headers=["*"],
+    allow_origins=security.ALLOWED_ORIGINS,
+    allow_methods=["GET", "POST"],
+    allow_headers=["Authorization", "Content-Type", "X-CSRF-Token"],
     allow_credentials=True,
 )
+
+
+@app.middleware("http")
+async def security_boundary(request: Request, call_next):
+    """所有 HTTP 請求共用的大小限制、CSRF 與瀏覽器安全標頭。"""
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            too_large = int(content_length) > security.MAX_BODY_BYTES
+        except ValueError:
+            too_large = True
+        if too_large:
+            response = JSONResponse({"detail": "請求內容過大"}, status_code=413)
+            security.add_security_headers(response)
+            return response
+    try:
+        security.enforce_csrf(request)
+    except HTTPException as exc:
+        response = JSONResponse({"detail": exc.detail}, status_code=exc.status_code)
+        security.add_security_headers(response)
+        return response
+    response = await call_next(request)
+    security.add_security_headers(response)
+    return response
 
 
 @app.on_event("startup")
@@ -80,6 +107,8 @@ def current_user(
         conn.close()
     if row is None:
         raise HTTPException(401, "帳號不存在")
+    if row["role"] not in ACTIVE_ROLES:
+        raise HTTPException(403, "此角色已停用")
     return dict(row)
 
 
@@ -88,8 +117,8 @@ class RegisterIn(BaseModel):
     email: str
     password: str
     display_name: str
-    role: str = "worker"                 # worker | agency_officer | auditor
-    acting_for: str = ""                 # agency_officer 才填
+    role: str = "worker"                 # worker | agency_officer | employer_officer
+    acting_for: str = ""                 # 組織承辦人才填
     org_lei: str = ""
     role_credential: str = ""            # ECR 憑證 SAID(對應 MockVerifier 認得的值)
 
@@ -124,18 +153,25 @@ class TamperIn(BaseModel):
 # ============ 認證端點 ================================================
 @app.post("/register")
 def register(body: RegisterIn):
-    if body.role not in ("worker", "agency_officer", "auditor"):
-        raise HTTPException(400, "role 必須是 worker / agency_officer / auditor")
+    if not security.ALLOW_PUBLIC_REGISTRATION:
+        raise HTTPException(404, "此環境未開放公開註冊")
+    if body.role not in ACTIVE_ROLES:
+        raise HTTPException(400, "role 必須是 worker / agency_officer / employer_officer")
+    if len(body.password) < 10:
+        raise HTTPException(400, "密碼至少需要 10 個字元")
+    email = body.email.strip().lower()
+    if not email or "@" not in email or len(email) > 254:
+        raise HTTPException(400, "email 格式不正確")
     conn = get_conn()
     try:
-        exists = conn.execute("SELECT 1 FROM users WHERE email=?", (body.email,)).fetchone()
+        exists = conn.execute("SELECT 1 FROM users WHERE email=?", (email,)).fetchone()
         if exists:
             raise HTTPException(409, "這個 email 已註冊")
         cur = conn.execute(
             "INSERT INTO users(email,password,display_name,role,acting_for,org_lei,"
             "role_credential,created_at) VALUES (?,?,?,?,?,?,?,?)",
             (
-                body.email,
+                email,
                 auth.hash_password(body.password),
                 body.display_name,
                 body.role,
@@ -149,21 +185,42 @@ def register(body: RegisterIn):
         uid = cur.lastrowid
     finally:
         conn.close()
-    return {"id": uid, "email": body.email, "role": body.role}
+    return {"id": uid, "email": email, "role": body.role}
 
 
 @app.post("/login")
-def login(body: LoginIn, response: Response):
+def login(body: LoginIn, response: Response, request: Request):
+    email = body.email.strip().lower()
+    client_ip = request.client.host if request.client else "unknown"
+    rate_key = "{}:{}".format(client_ip, email)
+    security.check_login_rate_limit(rate_key)
     conn = get_conn()
     try:
-        row = conn.execute("SELECT * FROM users WHERE email=?", (body.email,)).fetchone()
+        row = conn.execute("SELECT * FROM users WHERE email=?", (email,)).fetchone()
     finally:
         conn.close()
     if row is None or not auth.verify_password(body.password, row["password"]):
         raise HTTPException(401, "email 或密碼錯誤")
+    security.clear_login_attempts(rate_key)
     token = auth.make_token(row["id"])
-    response.set_cookie("session", token, httponly=True, samesite="lax")
-    return {"token": token, "user": _public_user(dict(row))}
+    csrf_token = auth.make_csrf_token()
+    response.set_cookie(
+        "session", token, httponly=True, secure=security.COOKIE_SECURE,
+        samesite="strict", max_age=auth.TOKEN_TTL_SECONDS, path="/",
+    )
+    response.set_cookie(
+        "csrf_token", csrf_token, httponly=False, secure=security.COOKIE_SECURE,
+        samesite="strict", max_age=auth.TOKEN_TTL_SECONDS, path="/",
+    )
+    # token 保留給 curl／API client；瀏覽器前端只使用 HttpOnly Cookie。
+    return {"token": token, "csrf_token": csrf_token, "user": _public_user(dict(row))}
+
+
+@app.post("/logout")
+def logout(response: Response):
+    response.delete_cookie("session", path="/")
+    response.delete_cookie("csrf_token", path="/")
+    return {"ok": True}
 
 
 @app.get("/me")
@@ -229,9 +286,19 @@ def _load_grant(conn, case_id, user_id):
 def _ensure_case_access(conn, case_id, user):
     case = _load_case(conn, case_id)
     grant = _load_grant(conn, case_id, user["id"])
-    if grant is None and case["worker_user_id"] != user["id"]:
+    is_owner = case["worker_user_id"] == user["id"]
+    if grant is None and not is_owner:
         raise HTTPException(403, "你在這個案件沒有任何授權")
+    if not is_owner and grant is not None:
+        expires_at = datetime.fromisoformat(grant["expires_at"])
+        if grant["revoked_at"] or expires_at <= datetime.now(timezone.utc):
+            raise HTTPException(403, "你在這個案件的授權已撤銷或到期")
     return case, grant
+
+
+def _ensure_audit_access(case, grant, user):
+    if case["worker_user_id"] != user["id"]:
+        raise HTTPException(403, "只有案件本人能查看完整可驗證操作紀錄")
 
 
 @app.get("/cases")
@@ -242,8 +309,11 @@ def list_cases(user: dict = Depends(current_user)):
         rows = conn.execute(
             "SELECT DISTINCT c.*, CASE WHEN c.worker_user_id=? THEN 1 ELSE 0 END AS is_owner "
             "FROM cases c LEFT JOIN grants g ON g.case_id=c.id "
-            "WHERE c.worker_user_id=? OR g.user_id=? ORDER BY c.created_at DESC",
-            (user["id"], user["id"], user["id"]),
+            "WHERE c.worker_user_id=? OR "
+            "(g.user_id=? AND g.revoked_at IS NULL AND g.expires_at>?) "
+            "ORDER BY c.created_at DESC",
+            (user["id"], user["id"], user["id"],
+             datetime.now(timezone.utc).isoformat(timespec="seconds")),
         ).fetchall()
         return [{
             "case_id": row["id"], "title": row["title"], "status": row["status"],
@@ -310,6 +380,21 @@ def add_grant(case_id: str, body: GrantIn, user: dict = Depends(current_user)):
         if target is None:
             raise HTTPException(404, "找不到這個使用者,請對方先註冊")
         scopes = set(body.scopes) if body.scopes else set(COLLAB_SCOPES)
+        if not scopes or not scopes.issubset(DELEGATABLE_SCOPES):
+            raise HTTPException(400, "授權包含不可委派的 scope")
+        if target["role"] == "employer_officer":
+            raise HTTPException(
+                400, "雇主案件參與權由已驗證的聘僱關係配置，不能用一般 Grant 改寫"
+            )
+        role_scope_limits = {
+            "worker": {"claim_prep"},
+            "agency_officer": {"claim_prep"},
+        }
+        allowed_for_target = role_scope_limits.get(target["role"], set())
+        if not scopes.issubset(allowed_for_target):
+            raise HTTPException(400, "這個角色不能取得指定的 scope")
+        if body.days_valid < 1 or body.days_valid > 90:
+            raise HTTPException(400, "授權期限必須介於 1 到 90 天")
         gid = "grant-{}-{}".format(case_id.lower(), target["id"])
         conn.execute(
             "INSERT OR REPLACE INTO grants(id,case_id,user_id,purpose,scopes,expires_at,revoked_at) "
@@ -355,7 +440,8 @@ def act(case_id: str, body: ActIn, user: dict = Depends(current_user)):
 def get_audit(case_id: str, user: dict = Depends(current_user)):
     conn = get_conn()
     try:
-        _, grant = _ensure_case_access(conn, case_id, user)
+        case, grant = _ensure_case_access(conn, case_id, user)
+        _ensure_audit_access(case, grant, user)
         agent = build_agent(conn, case_id, user, grant)
         ok, bad, msg = agent.audit.verify()
         return {
@@ -371,7 +457,8 @@ def get_audit(case_id: str, user: dict = Depends(current_user)):
 def verify_audit(case_id: str, user: dict = Depends(current_user)):
     conn = get_conn()
     try:
-        _, grant = _ensure_case_access(conn, case_id, user)
+        case, grant = _ensure_case_access(conn, case_id, user)
+        _ensure_audit_access(case, grant, user)
         agent = build_agent(conn, case_id, user, grant)
         ok, bad, msg = agent.audit.verify()
         return {"ok": ok, "bad_seq": bad, "message": msg}
@@ -382,6 +469,8 @@ def verify_audit(case_id: str, user: dict = Depends(current_user)):
 @app.post("/cases/{case_id}/audit/tamper")
 def tamper_audit(case_id: str, body: TamperIn, user: dict = Depends(current_user)):
     """demo 專用:故意改一筆,證明 verify 會抓到。上線要拿掉整個端點。"""
+    if not security.ENABLE_TAMPER_DEMO:
+        raise HTTPException(404, "此環境未啟用竄改示範")
     conn = get_conn()
     try:
         case, grant = _ensure_case_access(conn, case_id, user)
@@ -434,6 +523,9 @@ def api_status():
         "service": "Migrant Insurance Infrastructure",
         "version": app.version,
         "verifier": verifier.name,
+        "trust_mode": security.TRUST_MODE,
         "sandbox_cryptography": verifier.name == "vlei-sandbox",
         "production_vlei": False,
+        "tamper_demo_enabled": security.ENABLE_TAMPER_DEMO,
+        "cookie_secure": security.COOKIE_SECURE,
     }
