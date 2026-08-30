@@ -101,6 +101,31 @@ def load_all():
     }
 
 
+def load_enrollments():
+    """讀移工的實際投保紀錄。
+
+    這份跟 laws/policies 不同——那兩份是「條文」，這份是「她保了什麼」。
+    有了它，match_coverage 才是真的在比對，而不是回傳固定清單。
+
+    真實版本要串勞保局、健保署與雇主端保單系統，且都需要她本人的授權，
+    那正是 Grant 模型存在的理由。本 demo 全為合成資料。
+    """
+    path = os.path.join(KB_DIR, "enrollments.json")
+    if not os.path.exists(path):
+        return {"enrollments": [], "sha256": "", "version": "尚未建立"}
+    with open(path, "rb") as fh:
+        raw = fh.read()
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except json.JSONDecodeError:
+        return {"enrollments": [], "sha256": "", "version": "解析失敗"}
+    return {
+        "enrollments": data.get("enrollments", []),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "version": (data.get("meta") or {}).get("kb_version", ""),
+    }
+
+
 def status():
     """給 `run.py kb` 用的摘要。"""
     out = []

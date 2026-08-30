@@ -254,58 +254,97 @@ def _fixture_extraction(lang, statement, why):
 
 
 def match_coverage():
-    """3 Match — 比對職災、勞保與商業保險保障。
+    """3 Match — 比對她「實際保了什麼」與「條文說什麼情況賠」。
 
-    保障清單本身仍是人工編寫的示意內容（見 FIXTURE_NOTES）。
-    **但引用出處是真的**：從本地知識庫 `knowledge/laws.json` 撈，
-    並附上知識庫版本與 sha256，任何人都能重算確認引用的是哪一份。
+    這一格從固定清單改成真的比對，輸入有兩份：
 
-    知識庫還沒填條文時，citations 會是空的並註明原因——
-    **不會編造條號**。這正是先前犯過的錯：填錯的法條比留空更傷。
+      * `knowledge/enrollments.json` —— 她的投保紀錄（合成）
+      * `knowledge/laws.json` / `policies.json` —— 條文原文（真實）
 
-    為什麼不在這裡上網查：交件是錄影，錄影只有一次；
-    而且同一個問題不同時間得到不同答案就無法重現。
-    線上同步屬於維運排程，不屬於推論路徑（見 knowledge/VERSION.md）。
+    比對方式是關鍵字交集，不是向量檢索——幾十條的規模不需要。
+
+    最重要的輸出是 `unaware_but_covered`：她**有保、但自己不知道**的項目。
+    那是移工端第一痛點（漏賠），也是這個產品存在的理由。
+
+    真實版本要串勞保局、健保署與雇主端保單系統，三者都需要她本人授權；
+    目前投保紀錄為合成資料，條文出處則為真實原文。
     """
     kbs = knowledge.load_all()
-    keywords = ["職業傷害", "職災", "門診治療", "住院", "醫療費用"]
+    enr = knowledge.load_enrollments()
 
-    citations = []
-    for kb in kbs.values():
-        for entry in kb.find(keywords):
-            citations.append(kb.cite(entry))
+    # 本次事故的兩個面向，必須分開比對：
+    #   triggers = 這是什麼事件（手腕夾傷 → 職業傷害、意外傷害）
+    #   outcomes = 她實際需要什麼給付（就醫 → 醫療費用；請假 → 不能工作）
+    # 團保主約的觸發成立（是意外傷害）但給付不成立（只賠殘廢死亡，本案未達殘廢）。
+    # 把兩者混在一起會把主約誤判成適用——那正是先前查證條款時發現的錯誤。
+    incident_triggers = ["職業傷害", "職災", "職業傷病", "意外傷害"]
+    incident_outcomes = ["醫療費用", "不能工作"]
+
+    matched, not_matched, unaware = [], [], []
+    citations, seen_cites = [], set()
+
+    for e in enr["enrollments"]:
+        if e.get("status") != "有效":
+            continue
+        triggered = [x for x in e.get("covers", []) if x in incident_triggers]
+        payable = [x for x in e.get("pays_on", []) if x in incident_outcomes]
+
+        # 找出支持這項保障的條文，並收集引用
+        basis = []
+        for kb in kbs.values():
+            for entry in kb.find(e.get("covers", [])):
+                cite = kb.cite(entry)
+                key = cite["source"]
+                if key not in seen_cites:
+                    seen_cites.add(key)
+                    citations.append(cite)
+                basis.append(key)
+
+        row = {
+            "scheme": e["scheme"],
+            "insurer": e.get("insurer", ""),
+            "enrolled_by": e.get("enrolled_by", ""),
+            "worker_aware": e.get("worker_aware", True),
+            "basis": basis[:2],
+        }
+        if e.get("note"):
+            row["note"] = e["note"]
+
+        if triggered and payable:
+            row["status"] = "適用（後位）" if e.get("priority") == "後位" else "適用"
+            row["triggered_by"] = triggered
+            row["pays"] = payable
+            if e.get("priority"):
+                row["priority"] = e["priority"]
+            matched.append(row)
+            if not e.get("worker_aware", True):
+                unaware.append(e["scheme"])
+        elif triggered:
+            # 觸發成立但給付項目對不上——主約典型情況
+            row["reason"] = "事故性質符合，但本保單只賠 {}，本案未達該程度".format(
+                "、".join(e.get("pays_on", [])))
+            not_matched.append(row)
+        else:
+            row["reason"] = "承保事故類型與本次事故無交集"
+            not_matched.append(row)
 
     result = {
-        # 依知識庫實際條文修正過：原本寫「雇主團體傷害險 適用」是錯的。
-        # 團體傷害保險單示範條款第 5 條，主約只賠「殘廢或死亡」；
-        # 阮氏梅手腕夾傷未達殘廢，主約其實不賠——賠的是醫療給付附加條款，
-        # 而且只賠「超過全民健康保險給付部分」。
-        "matched": [
-            {"scheme": "職災保險醫療給付", "status": "適用",
-             "note": "門診及住院診療；費用由保險人支付予健保，被保險人不得請領現金",
-             "basis": "勞工職業災害保險及保護法 第 38 條"},
-            {"scheme": "職災保險傷病給付", "status": "適用",
-             "note": "自不能工作之日起算第 4 日起；前 2 個月全額、第 3 個月起 70%，最長 2 年",
-             "basis": "勞工職業災害保險及保護法 第 42 條"},
-            {"scheme": "傷害醫療保險金附加條款", "status": "須確認雇主是否加保",
-             "note": "只賠超過健保給付部分，且限事故發生日起 180 日內之治療",
-             "basis": "傷害醫療保險金給付附加條款（實支實付型）"},
-        ],
-        "not_matched": [
-            {"scheme": "團體傷害保險主約", "reason": "主約只賠殘廢或死亡，本案未達殘廢",
-             "basis": "團體傷害保險單示範條款 第 5 條"},
-        ],
+        "matched": matched,
+        "not_matched": not_matched,
+        "unaware_but_covered": unaware,
         "citations": citations,
     }
 
-    if not citations:
-        result["citation_note"] = (
-            "[假資料] 知識庫尚未填入條文（knowledge/laws.json）。"
-            "刻意不編造條號——填錯的法條比留空更傷。"
+    if unaware:
+        result["headline"] = (
+            "她有 {} 項保障是自己不知道的：{}".format(len(unaware), "、".join(unaware))
         )
+    if citations:
+        result["citation_source"] = "本地知識庫 v{}（離線，可重現）".format(kbs["laws"].version)
     else:
-        result["citation_source"] = "本地知識庫 v{}（離線，可重現）".format(
-            kbs["laws"].version)
+        result["citation_note"] = "[假資料] 知識庫尚未填入條文，刻意不編造條號"
+    result["enrollment_source"] = "[合成] 投保紀錄 v{}　sha {}…".format(
+        enr["version"], enr["sha256"][:16])
     return result
 
 
