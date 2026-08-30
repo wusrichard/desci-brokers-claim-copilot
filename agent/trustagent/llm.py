@@ -91,7 +91,7 @@ def chat_json(system, user, model=None, max_tokens=1024, timeout=40):
             "Content-Type": "application/json",
             # OpenRouter 用這兩個標頭做用量歸屬，非必填
             "HTTP-Referer": "https://github.com/desci-brokers",
-            "X-Title": "DeSci Brokers Claim Copilot",
+            "X-Title": "DeSci Brokers Migrant Insurance Infrastructure",
         },
         method="POST",
     )

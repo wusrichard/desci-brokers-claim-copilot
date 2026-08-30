@@ -1,4 +1,4 @@
-"""情境：移工職災保險 Claim Copilot（依 0829 Concept deck 主軸）。
+"""情境：移工職災理賠（Migrant Insurance Infrastructure 主線，依 0829 Concept deck）。
 
 流程 Verify → Understand → Match → Claim → Track → Record。
 
@@ -502,7 +502,7 @@ def _build_mock_verifier():
 
 
 SCENARIO = {
-    "name": "移工職災保險 Claim Copilot",
+    "name": "移工職災理賠",
     "case_id": CASE_ID,
     "credential_said": DIAGNOSIS_SAID,
     "local_only_fields": LOCAL_ONLY,

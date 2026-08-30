@@ -32,7 +32,7 @@ from fastapi.responses import FileResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from scenarios import claim_copilot
+from scenarios import migrant_claim
 
 from . import auth
 from .db import get_conn, init_db
@@ -43,7 +43,7 @@ from .identity import (
     default_expiry,
 )
 
-app = FastAPI(title="Verifiable Migrant Claims — 後端骨架", version="0.1.0")
+app = FastAPI(title="Migrant Insurance Infrastructure — 後端骨架", version="0.1.0")
 FRONTEND_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "frontend")
 app.mount("/static", StaticFiles(directory=FRONTEND_DIR), name="static")
 app.add_middleware(
@@ -271,13 +271,13 @@ def get_case(case_id: str, user: dict = Depends(current_user)):
                 "in_scope": (t.required_scope in scopes) and not revoked,
                 "high_risk": t.is_high_risk(),
             }
-            for t in claim_copilot.build_tools()
+            for t in migrant_claim.build_tools()
         ]
         return {
             "case_id": case["id"],
             "title": case["title"],
             "status": case["status"],
-            "verifier": claim_copilot.build_verifier().name,
+            "verifier": migrant_claim.build_verifier().name,
             "acting_as": {
                 "display_name": user["display_name"],
                 "acting_for": user["acting_for"],
@@ -344,7 +344,7 @@ def act(case_id: str, body: ActIn, user: dict = Depends(current_user)):
             "reason": result.decision.reason,
             "value": result.value,
             "receipt_seq": result.receipt_seq,
-            "fixture_note": claim_copilot.FIXTURE_NOTES.get(body.tool),
+            "fixture_note": migrant_claim.FIXTURE_NOTES.get(body.tool),
         }
     finally:
         conn.close()
@@ -429,9 +429,9 @@ def root():
 
 @app.get("/api/status")
 def api_status():
-    verifier = claim_copilot.build_verifier()
+    verifier = migrant_claim.build_verifier()
     return {
-        "service": "Verifiable Migrant Claims",
+        "service": "Migrant Insurance Infrastructure",
         "version": app.version,
         "verifier": verifier.name,
         "sandbox_cryptography": verifier.name == "vlei-sandbox",
