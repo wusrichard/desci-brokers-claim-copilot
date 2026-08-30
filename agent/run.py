@@ -200,7 +200,7 @@ def cmd_llm(args) -> int:
     交件前跑這個確認，不要等到錄影當下才發現金鑰沒讀到。
     """
     from trustagent import llm
-    s = load_scenario("claim_copilot")
+    s = load_scenario("migrant_claim")
 
     c.header("模型連線自我檢查", "確認金鑰、連線與抽取結果")
     c.kv("金鑰", llm.key_fingerprint())
@@ -238,10 +238,10 @@ def cmd_llm(args) -> int:
 
 def cmd_claim(args) -> int:
     """理賠主線：六步流程 + 仲介承辦人授權（Corppass 模式）。"""
-    s = load_scenario("claim_copilot")
+    s = load_scenario("migrant_claim")
     agent = build_agent()
 
-    c.header("移工職災保險 Claim Copilot", "DeSci Brokers｜合成資料原型")
+    c.header("Migrant Insurance Infrastructure｜移工職災理賠", "DeSci Brokers｜合成資料原型")
     # 聲明內容依實際狀態產生，不寫死——標注錯了跟沒標一樣糟
     from trustagent import llm
     if llm.is_available():
@@ -338,7 +338,7 @@ def _print_value(value) -> None:
 
 def cmd_tour(args) -> int:
     """證明引擎與情境分離：同一組引擎程式碼跑兩個完全不同的情境。"""
-    for name in ("claim_copilot", "health_pass", "medical_claim"):
+    for name in ("migrant_claim", "health_pass", "medical_claim"):
         s = load_scenario(name)
         agent = build_agent()
         c.header("情境：{}".format(s.SCENARIO["name"]), "引擎程式碼完全相同，只換了 scenarios/ 底下一個模組")

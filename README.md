@@ -1,4 +1,4 @@
-# 移工職災保險 Claim Copilot
+# 移工保險基礎設施 Migrant Insurance Infrastructure
 
 > **DeSci Brokers**｜Trustworthy AI Hackathon 2026
 > 一個代表**移工本人**的可信 AI Agent：協助理解保障、準備理賠、追蹤進度，
@@ -64,7 +64,7 @@ cd agent && python3 run.py claim
 ## 專案結構
 
 ```
-build/
+migrant-insurance-infrastructure/
 ├── README.md                    ← 你正在讀的這份
 ├── .gitignore                   金鑰、大檔、Python 產物
 │
@@ -84,7 +84,7 @@ build/
 │   │   └── console.py           終端輸出
 │   │
 │   └── scenarios/               情境 — 換皮只換這裡
-│       ├── claim_copilot.py     移工職災保險理賠（主線）
+│       ├── migrant_claim.py     移工職災理賠（主線）
 │       ├── health_pass.py       職安健檢綠燈（現為理賠的證據之一）
 │       └── medical_claim.py     個人醫療理賠（證明引擎可複用）
 │

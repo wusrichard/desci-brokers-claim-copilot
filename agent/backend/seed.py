@@ -14,7 +14,7 @@
 
 from datetime import datetime, timezone
 
-from scenarios import claim_copilot as s
+from scenarios import migrant_claim as s
 
 from . import auth
 from .db import get_conn, init_db

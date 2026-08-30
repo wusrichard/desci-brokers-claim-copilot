@@ -41,7 +41,7 @@ cd agent
 | 簽章金鑰 | 每次啟動重新 generate | 存 `.secrets/`,重啟沿用 |
 
 **沒變的**:`PolicyGate` 判定順序、`Decision` 決策碼、`Tool` 定義、雜湊鏈演算法、`Verifier` 介面、
-`scenarios/claim_copilot.py` 的六步工具。`SqliteAuditLog` 直接重用 `trustagent.audit.Entry` 的 `compute_hash()`。
+`scenarios/migrant_claim.py` 的六步工具。`SqliteAuditLog` 直接重用 `trustagent.audit.Entry` 的 `compute_hash()`。
 
 ---
 
@@ -138,5 +138,5 @@ curl -s $BASE/cases/$CID/audit/tamper -H "authorization: Bearer $MAI" -H 'conten
 - 認證是 **demo 等級**:HMAC token、pbkdf2 密碼,沒有 refresh token、沒有 rate limit、沒有 email 驗證
 - `tamper` 端點是給現場演示用的後門,**上線前整個刪掉**
 - 授權模型仍是應用層 DB 記錄,**不是**簽章式同意 ACDC(那是 Phase 1)
-- 憑證驗證仍走 `scenarios.claim_copilot.build_verifier()` — 找不到 `../../vlei-sandbox` 就是 MockVerifier
+- 憑證驗證仍走 `scenarios.migrant_claim.build_verifier()` — 找不到 `../../vlei-sandbox` 就是 MockVerifier
 - 六步工具除 `understand_incident` 外全是固定值,和 CLI 完全一樣

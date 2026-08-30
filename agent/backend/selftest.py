@@ -20,7 +20,7 @@ _tmp = tempfile.NamedTemporaryFile(suffix=".db", delete=False)
 _tmp.close()
 os.environ["CLAIM_DB_PATH"] = _tmp.name
 
-from scenarios import claim_copilot as s          # noqa: E402
+from scenarios import migrant_claim as s          # noqa: E402
 from trustagent import Grant, Principal, TrustAgent  # noqa: E402
 
 from backend.audit_store import SqliteAuditLog, load_audit_key  # noqa: E402
