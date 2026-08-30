@@ -18,7 +18,7 @@ CREATE TABLE IF NOT EXISTS users (
     email         TEXT UNIQUE NOT NULL,
     password      TEXT NOT NULL,              -- pbkdf2 salt$hash,見 auth.py
     display_name  TEXT NOT NULL,
-    role          TEXT NOT NULL,              -- worker | agency_officer | auditor
+    role          TEXT NOT NULL,              -- worker | agency_officer | employer_officer
     acting_for    TEXT,                       -- 代表哪個組織(顯示名),自然人留 NULL
     org_lei       TEXT,
     role_credential TEXT,                     -- 證明代理關係的 ECR 憑證 SAID
@@ -39,7 +39,7 @@ CREATE TABLE IF NOT EXISTS grants (
     case_id     TEXT NOT NULL,
     user_id     INTEGER NOT NULL,
     purpose     TEXT NOT NULL,
-    scopes      TEXT NOT NULL,                -- 逗號分隔:claim_prep,employer_record
+    scopes      TEXT NOT NULL,                -- 逗號分隔的應用層權限
     expires_at  TEXT NOT NULL,
     revoked_at  TEXT,
     UNIQUE(case_id, user_id)

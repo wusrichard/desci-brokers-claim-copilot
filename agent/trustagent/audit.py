@@ -105,7 +105,7 @@ class AuditLog:
         return entry
 
     def verify(self) -> Tuple[bool, Optional[int], str]:
-        """重走整條鏈。回傳 (是否完好, 第一個壞掉的序號, 說明)。"""
+        """重走雜湊鏈，並在有金鑰時逐筆驗 Ed25519 簽章。"""
         prev = GENESIS
         for entry in self.entries:
             if entry.prev != prev:
@@ -113,6 +113,15 @@ class AuditLog:
             recomputed = entry.compute_hash()
             if recomputed != entry.hash:
                 return False, entry.seq, "第 {} 筆內容被改過（雜湊重算不符）".format(entry.seq)
+            if self._key is not None:
+                if not entry.sig:
+                    return False, entry.seq, "第 {} 筆缺少 Ed25519 簽章".format(entry.seq)
+                try:
+                    self._key.public_key().verify(
+                        bytes.fromhex(entry.sig), bytes.fromhex(entry.hash)
+                    )
+                except Exception:
+                    return False, entry.seq, "第 {} 筆 Ed25519 簽章驗證失敗".format(entry.seq)
             prev = entry.hash
         return True, None, "全部 {} 筆完好".format(len(self.entries))
 

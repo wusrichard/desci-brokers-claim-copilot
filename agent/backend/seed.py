@@ -7,9 +7,9 @@
     mai@demo.tw        移工 阮氏梅
     meiling@hongtai.tw 仲介承辦人 陳美玲(ECR 有效)
     zhihao@hongtai.tw  仲介承辦人 林志豪(ECR 已撤銷 → 代理關係驗證會失敗)
-    sgs@audit.tw       稽核方 SGS 承辦
+    taka@jinghong.tw   雇主 Migrant Worker Manager Taka(ECR 有效)
 
-案件 WIC-DEMO-0001:阮氏梅已建案,並已授權陳美玲、林志豪協作(scope: claim_prep)。
+案件 WIC-DEMO-0001:阮氏梅已建案；仲介獲理賠協作權，Taka 獲雇主案件參與權。
 """
 
 from datetime import datetime, timezone
@@ -18,7 +18,7 @@ from scenarios import migrant_claim as s
 
 from . import auth
 from .db import get_conn, init_db
-from .identity import COLLAB_SCOPES, WORKER_SCOPES, default_expiry
+from .identity import COLLAB_SCOPES, EMPLOYER_SCOPES, WORKER_SCOPES, default_expiry
 
 PW = auth.hash_password("demo1234")
 NOW = datetime.now(timezone.utc).isoformat(timespec="seconds")
@@ -30,8 +30,8 @@ USERS = [
          acting_for=s.AGENCY_NAME, org_lei=s.AGENCY_LEI, role_credential=s.ECR_ACTIVE),
     dict(email="zhihao@hongtai.tw", display_name="林志豪", role="agency_officer",
          acting_for=s.AGENCY_NAME, org_lei=s.AGENCY_LEI, role_credential=s.ECR_REVOKED),
-    dict(email="sgs@audit.tw", display_name="SGS 稽核承辦", role="auditor",
-         acting_for="SGS Taiwan", org_lei=None, role_credential=None),
+    dict(email="taka@jinghong.tw", display_name=s.TAKA_NAME, role="employer_officer",
+         acting_for=s.EMPLOYER_NAME, org_lei=s.EMPLOYER_LEI, role_credential=s.TAKA_ECR),
 ]
 
 CASE_ID = "WIC-DEMO-0001"
@@ -40,6 +40,13 @@ CASE_ID = "WIC-DEMO-0001"
 def _upsert_user(conn, u):
     row = conn.execute("SELECT id FROM users WHERE email=?", (u["email"],)).fetchone()
     if row:
+        # sandbox 重建後 SAID 會改變；每次 seed 都同步角色與當前憑證，避免舊帳號失效。
+        conn.execute(
+            "UPDATE users SET display_name=?,role=?,acting_for=?,org_lei=?,role_credential=? "
+            "WHERE id=?",
+            (u["display_name"], u["role"], u["acting_for"], u["org_lei"],
+             u["role_credential"], row["id"]),
+        )
         return row["id"]
     cur = conn.execute(
         "INSERT INTO users(email,password,display_name,role,acting_for,org_lei,"
@@ -69,6 +76,8 @@ def main():
              "協助理賠文件整理", COLLAB_SCOPES, 30),
             ("grant-{}-zhihao".format(CASE_ID.lower()), ids["zhihao@hongtai.tw"],
              "協助理賠文件整理", COLLAB_SCOPES, 30),
+            ("grant-{}-taka".format(CASE_ID.lower()), ids["taka@jinghong.tw"],
+             "雇主確認聘僱並提供員工保險與事故證據", EMPLOYER_SCOPES, 30),
         ]
         for gid, uid, purpose, scopes, days in grants:
             conn.execute(
@@ -81,7 +90,8 @@ def main():
         conn.close()
 
     print("seed 完成。案件:", CASE_ID)
-    print("登入:mai@demo.tw / meiling@hongtai.tw / zhihao@hongtai.tw / sgs@audit.tw(密碼 demo1234)")
+    print("登入:mai@demo.tw / meiling@hongtai.tw / zhihao@hongtai.tw / "
+          "taka@jinghong.tw(密碼 demo1234)")
 
 
 if __name__ == "__main__":

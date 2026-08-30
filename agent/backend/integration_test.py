@@ -31,14 +31,50 @@ def headers(value):
 def main():
     seed.main()
     with TestClient(app) as client:
-        expect("前端首頁", client.get("/").status_code == 200)
+        home = client.get("/")
+        expect("前端首頁", home.status_code == 200)
+        expect("CSP 與 anti-clickjacking 標頭存在",
+               "default-src 'self'" in home.headers.get("content-security-policy", "")
+               and home.headers.get("x-frame-options") == "DENY")
         status = client.get("/api/status").json()
         expect("vLEI sandbox 已連接", status["verifier"] == "vlei-sandbox")
+        expect("Demo 模式保留竄改展示", status["tamper_demo_enabled"])
+
+        weak = client.post("/register", json={
+            "email": "weak@example.test", "password": "short",
+            "display_name": "Weak", "role": "worker",
+        })
+        expect("公開註冊拒絕弱密碼", weak.status_code == 400)
+        retired_role = client.post("/register", json={
+            "email": "retired-auditor@example.test", "password": "demo-password-123",
+            "display_name": "Retired Auditor", "role": "auditor",
+        })
+        expect("auditor 角色已停用，不能建立新帳號", retired_role.status_code == 400)
+
+        for _ in range(8):
+            last_bad = client.post("/login", json={
+                "email": "rate-limit@example.test", "password": "wrong"
+            })
+        limited = client.post("/login", json={
+            "email": "rate-limit@example.test", "password": "wrong"
+        })
+        expect("登入失敗節流", last_bad.status_code == 401 and limited.status_code == 429)
 
         mai = token(client, "mai@demo.tw")
         cases = client.get("/cases", headers=headers(mai))
         expect("移工能列出案件", cases.status_code == 200 and cases.json())
         case_id = cases.json()[0]["case_id"]
+
+        no_csrf = client.post(
+            "/cases/{}/act".format(case_id), json={"tool": "verify_employment"}
+        )
+        expect("Cookie 認證的變更請求沒有 CSRF token 會被擋", no_csrf.status_code == 403)
+        csrf = client.cookies.get("csrf_token")
+        with_csrf = client.post(
+            "/cases/{}/act".format(case_id),
+            headers={"X-CSRF-Token": csrf}, json={"tool": "verify_employment"},
+        )
+        expect("正確 CSRF token 可通過", with_csrf.status_code == 200)
 
         case = client.get("/cases/" + case_id, headers=headers(mai)).json()
         expect("案件回傳 scopes 與 capabilities", bool(case["grant"]) and bool(case["capabilities"]))
@@ -60,6 +96,12 @@ def main():
         ).json()
         expect("本人確認後放行", confirmed["allowed"])
 
+        escalated = client.post(
+            "/cases/{}/grants".format(case_id), headers=headers(mai),
+            json={"email": "meiling@hongtai.tw", "scopes": ["full_medical"]},
+        )
+        expect("不能把不可委派的 full_medical scope 授權給協作者", escalated.status_code == 400)
+
         meiling = token(client, "meiling@hongtai.tw")
         ok = client.post(
             "/cases/{}/act".format(case_id), headers=headers(meiling),
@@ -79,18 +121,85 @@ def main():
         ).json()
         expect("撤銷 ECR 承辦人被擋", revoked["code"] == "ROLE_NOT_VERIFIED")
 
-        sgs = token(client, "sgs@audit.tw")
-        denied = client.get("/cases/" + case_id, headers=headers(sgs))
-        expect("未授權稽核方不能讀案件", denied.status_code == 403)
+        taka = token(client, "taka@jinghong.tw")
+        taka_case = client.get("/cases/" + case_id, headers=headers(taka))
+        expect("Taka 可進入雇主案件頁", taka_case.status_code == 200)
+        taka_case = taka_case.json()
+        expect("Taka 以晶宏電子 Migrant Worker Manager 身分行動",
+               taka_case["acting_as"]["acting_for"] == "晶宏電子股份有限公司"
+               and bool(taka_case["acting_as"]["role_credential"]))
+        for tool_name in (
+            "confirm_worker_employment",
+            "submit_employer_incident_report",
+            "submit_insurance_enrollment_record",
+            "track_employer_tasks",
+        ):
+            employer_action = client.post(
+                "/cases/{}/act".format(case_id), headers=headers(taka),
+                json={"tool": tool_name},
+            ).json()
+            expect("Taka 可執行 {}".format(tool_name), employer_action["allowed"])
+        employer_blocked = client.post(
+            "/cases/{}/act".format(case_id), headers=headers(taka),
+            json={"tool": "submit_claim", "confirmed": True},
+        ).json()
+        expect("Taka 不能代表移工正式送件", employer_blocked["code"] == "OUT_OF_SCOPE")
+        medical_blocked = client.post(
+            "/cases/{}/act".format(case_id), headers=headers(taka),
+            json={"tool": "read_full_medical_history", "confirmed": True},
+        ).json()
+        expect("Taka 不能查看完整病歷", medical_blocked["code"] == "OUT_OF_SCOPE")
+        expect("Taka 不是案件本人，不能讀完整可驗證操作鏈",
+               client.get("/cases/{}/audit".format(case_id),
+                          headers=headers(taka)).status_code == 403)
+        expect("仲介承辦人也不能讀完整可驗證操作鏈",
+               client.get("/cases/{}/audit".format(case_id),
+                          headers=headers(meiling)).status_code == 403)
+
+        employer_scope_escalation = client.post(
+            "/cases/{}/grants".format(case_id), headers=headers(mai),
+            json={"email": "meiling@hongtai.tw", "scopes": ["employer_insurance"]},
+        )
+        expect("案件本人不能把雇主平台權限委派給仲介",
+               employer_scope_escalation.status_code == 400)
+        employer_claim_escalation = client.post(
+            "/cases/{}/grants".format(case_id), headers=headers(mai),
+            json={"email": "taka@jinghong.tw", "scopes": ["claim_prep"]},
+        )
+        expect("一般 Grant 不能把移工理賠權限改發給雇主",
+               employer_claim_escalation.status_code == 400)
+
+        meiling_case = client.get("/cases/" + case_id, headers=headers(meiling)).json()
+        revoked_grant = client.post(
+            "/grants/{}/revoke".format(meiling_case["grant"]["id"]), headers=headers(mai)
+        )
+        expect("案件本人可撤銷協作者 Grant", revoked_grant.status_code == 200)
+        expect("Grant 撤銷後協作者立即失去案件讀取權",
+               client.get("/cases/" + case_id, headers=headers(meiling)).status_code == 403)
 
         audit = client.get("/cases/{}/audit".format(case_id), headers=headers(mai)).json()
-        expect("稽核鏈竄改前 PASS", audit["verify"]["ok"])
+        expect("可驗證操作鏈竄改前 PASS", audit["verify"]["ok"])
+        taka_entry = next(
+            e for e in audit["entries"]
+            if e["principal"].startswith("Taka") and e["allowed"]
+        )
+        expect("Taka 成功操作也留下公司、ECR 與 Verifier 證據",
+               taka_entry["detail"]["delegation"]["acting_for"] == "晶宏電子股份有限公司"
+               and taka_entry["detail"]["delegation"]["role_credential"]
+               and taka_entry["detail"]["delegation"]["verifier"] == "vlei-sandbox")
+        expect("操作紀錄已啟用 Ed25519 簽章與驗簽",
+               audit["signed"] and "Ed25519" in audit["verify"]["message"])
         victim = next(e["seq"] for e in audit["entries"] if not e["allowed"])
         tampered = client.post(
             "/cases/{}/audit/tamper".format(case_id), headers=headers(mai),
             json={"seq": victim, "field": "code", "value": "TAMPERED"},
         ).json()
         expect("竄改後 FAIL", not tampered["verify"]["ok"])
+
+        csrf = client.cookies.get("csrf_token")
+        expect("登出也受 CSRF 保護",
+               client.post("/logout").status_code == 403
+               and client.post("/logout", headers={"X-CSRF-Token": csrf}).status_code == 200)
 
     print("\nAPI 整合測試全部通過")
 

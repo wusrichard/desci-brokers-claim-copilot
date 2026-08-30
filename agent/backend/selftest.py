@@ -21,7 +21,7 @@ _tmp.close()
 os.environ["CLAIM_DB_PATH"] = _tmp.name
 
 from scenarios import migrant_claim as s          # noqa: E402
-from trustagent import Grant, Principal, TrustAgent  # noqa: E402
+from trustagent import AuditLog, Grant, Principal, TrustAgent  # noqa: E402
 
 from backend.audit_store import SqliteAuditLog, load_audit_key  # noqa: E402
 from backend.db import get_conn, init_db          # noqa: E402
@@ -55,6 +55,24 @@ def officer_agent(conn, case_id, revoked):
     )
     g = Grant(id="g-o", principal=p, purpose="文件整理", scopes={"claim_prep"},
               expires_at=_dt(default_expiry(30)))
+    a = TrustAgent(p, g, verifier=s.build_verifier(),
+                   audit=SqliteAuditLog(conn, case_id, key=load_audit_key()))
+    a.register_all(s.build_tools())
+    return a
+
+
+def employer_agent(conn, case_id):
+    p = Principal(
+        id="employer:3", display_name=s.TAKA_NAME, kind="person",
+        acting_for=s.EMPLOYER_NAME, org_lei=s.EMPLOYER_LEI,
+        role_credential=s.TAKA_ECR,
+    )
+    g = Grant(
+        id="g-e", principal=p, purpose="提供雇主端證據",
+        scopes={"employment_confirm", "employer_evidence", "employer_insurance",
+                "case_status_limited"},
+        expires_at=_dt(default_expiry(30)),
+    )
     a = TrustAgent(p, g, verifier=s.build_verifier(),
                    audit=SqliteAuditLog(conn, case_id, key=load_audit_key()))
     a.register_all(s.build_tools())
@@ -101,6 +119,50 @@ def main():
     r = ro.act("list_missing_documents")
     check("已離職承辦人被擋(ROLE_NOT_VERIFIED)",
           r.blocked and r.decision.code == "ROLE_NOT_VERIFIED")
+
+    print("\n── 雇主 Migrant Worker Manager ──")
+    employer = employer_agent(conn, case_id)
+    check("Taka 有效 ECR 可確認聘僱",
+          employer.act("confirm_worker_employment").decision.allowed)
+    check("Taka 可提交雇主事故報告",
+          employer.act("submit_employer_incident_report").decision.allowed)
+    check("Taka 可提供員工加保證明",
+          employer.act("submit_insurance_enrollment_record").decision.allowed)
+    check("Taka 可查看公司端待辦",
+          employer.act("track_employer_tasks").decision.allowed)
+    r = employer.act("list_missing_documents")
+    check("Taka 不能執行移工理賠工具",
+          r.blocked and r.decision.code == "OUT_OF_SCOPE")
+    r = employer.act("read_full_medical_history")
+    check("Taka 不能讀完整病歷",
+          r.blocked and r.decision.code == "OUT_OF_SCOPE")
+
+    print("\n── Verifier fail-closed ──")
+    old_mode = os.environ.get("AGENT_TRUST_MODE")
+    old_dir = os.environ.get("VLEI_SANDBOX_DIR")
+    os.environ["AGENT_TRUST_MODE"] = "sandbox_strict"
+    os.environ["VLEI_SANDBOX_DIR"] = "/tmp/definitely-not-a-vlei-sandbox"
+    strict_p = Principal(
+        id="agency:strict", display_name="嚴格模式承辦人", acting_for=s.AGENCY_NAME,
+        org_lei=s.AGENCY_LEI, role_credential="synthetic-ecr-said",
+    )
+    strict_g = Grant(
+        id="g-strict", principal=strict_p, purpose="文件整理", scopes={"claim_prep"},
+        expires_at=_dt(default_expiry(30)),
+    )
+    strict_a = TrustAgent(strict_p, strict_g, verifier=s.build_verifier(), audit=AuditLog())
+    strict_a.register_all(s.build_tools())
+    strict_r = strict_a.act("list_missing_documents")
+    check("strict 模式找不到 verifier 時 fail closed(VERIFIER_UNAVAILABLE)",
+          strict_r.blocked and strict_r.decision.code == "VERIFIER_UNAVAILABLE")
+    if old_mode is None:
+        os.environ.pop("AGENT_TRUST_MODE", None)
+    else:
+        os.environ["AGENT_TRUST_MODE"] = old_mode
+    if old_dir is None:
+        os.environ.pop("VLEI_SANDBOX_DIR", None)
+    else:
+        os.environ["VLEI_SANDBOX_DIR"] = old_dir
 
     print("\n── 稽核鏈:持久化 + 竄改偵測 ──")
     ok, _, msg = w.audit.verify()

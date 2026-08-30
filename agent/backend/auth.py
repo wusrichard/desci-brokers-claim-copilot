@@ -10,6 +10,7 @@ import hashlib
 import hmac
 import json
 import os
+import secrets
 import time
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -22,10 +23,13 @@ TOKEN_TTL_SECONDS = 12 * 3600
 
 # ---- server secret（簽 token 用）------------------------------------------
 def server_secret() -> bytes:
-    os.makedirs(SECRETS_DIR, exist_ok=True)
+    os.makedirs(SECRETS_DIR, mode=0o700, exist_ok=True)
+    os.chmod(SECRETS_DIR, 0o700)
     if not os.path.exists(SECRET_PATH):
-        with open(SECRET_PATH, "w", encoding="utf-8") as fh:
+        fd = os.open(SECRET_PATH, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600)
+        with os.fdopen(fd, "w", encoding="utf-8") as fh:
             fh.write(os.urandom(32).hex())
+    os.chmod(SECRET_PATH, 0o600)
     with open(SECRET_PATH, encoding="utf-8") as fh:
         return bytes.fromhex(fh.read().strip())
 
@@ -63,6 +67,10 @@ def make_token(user_id: int) -> str:
     body = _b64u(payload.encode("utf-8"))
     sig = _b64u(hmac.new(server_secret(), body.encode("ascii"), hashlib.sha256).digest())
     return body + "." + sig
+
+
+def make_csrf_token() -> str:
+    return secrets.token_urlsafe(32)
 
 
 def read_token(token: str):

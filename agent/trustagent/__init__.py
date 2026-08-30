@@ -7,7 +7,7 @@ from .agent import TrustAgent
 from .audit import AuditLog
 from .gate import PolicyGate
 from .models import ActionResult, Decision, Grant, Principal, Tool, HIGH, LOW
-from .verifier import MockVerifier, VerificationResult, Verifier, VleiVerifier
+from .verifier import MockVerifier, UnavailableVerifier, VerificationResult, Verifier, VleiVerifier
 
 __all__ = [
     "TrustAgent",
@@ -21,6 +21,7 @@ __all__ = [
     "HIGH",
     "LOW",
     "MockVerifier",
+    "UnavailableVerifier",
     "VleiVerifier",
     "Verifier",
     "VerificationResult",

@@ -31,9 +31,10 @@
         <div class="brand-sub">移工保險基礎設施</div>
       </div>
       <nav>
-        <button class="nav-item active" data-tab="workflow">理賠流程</button>
-        <button class="nav-item" data-tab="delegation">代理與授權</button>
-        <button class="nav-item" data-tab="audit">稽核紀錄</button>
+        <button class="nav-item standard-nav active" data-tab="workflow">理賠流程</button>
+        <button class="nav-item standard-nav" data-tab="delegation">代理與授權</button>
+        <button id="employer-nav" class="nav-item hidden" data-tab="employer">雇主保險平台</button>
+        <button class="nav-item standard-nav" data-tab="audit">可驗證操作紀錄</button>
       </nav>
       <div class="sidebar-bottom">
         <a href="/docs" target="_blank">API 文件 ↗</a>
@@ -75,6 +76,49 @@
         </div>
       </section>
 
+      <section id="employer-tab" class="tab-panel hidden">
+        <div class="section-heading">
+          <div><p class="step-label">EMPLOYER INSURANCE DESK</p><h3>公司員工保險平台</h3></div>
+          <p>Taka 只能提供公司掌握的聘僱、事故與加保證據；不能控制移工理賠或查看完整病歷。</p>
+        </div>
+        <article class="employer-identity panel">
+          <div>
+            <span class="status-pill ok">vLEI ECR 有效</span>
+            <h3>Taka</h3>
+            <p>晶宏電子股份有限公司 · Migrant Worker Manager</p>
+          </div>
+          <div class="identity-proof">
+            <span>公司 LEI</span><code id="employer-lei">載入中…</code>
+            <span>角色憑證 SAID</span><code id="employer-said">載入中…</code>
+          </div>
+        </article>
+        <div class="employer-actions">
+          <button class="workflow-card employer-action" data-tool="confirm_worker_employment">
+            <span class="number">01</span><h4>確認聘僱關係</h4><p>確認在職狀態、員工編號與契約期間。</p>
+          </button>
+          <button class="workflow-card employer-action" data-tool="submit_employer_incident_report">
+            <span class="number">02</span><h4>提交事故報告</h4><p>提供雇主掌握的事故事實，不覆蓋移工陳述。</p>
+          </button>
+          <button class="workflow-card employer-action" data-tool="submit_insurance_enrollment_record">
+            <span class="number">03</span><h4>提供加保證明</h4><p>從公司員工保險平台提供保單與加保狀態。</p>
+          </button>
+          <button class="workflow-card employer-action" data-tool="track_employer_tasks">
+            <span class="number">04</span><h4>查看公司待辦</h4><p>只顯示雇主側補件與處理進度。</p>
+          </button>
+        </div>
+        <div class="split-panel employer-result-grid">
+          <article class="panel privacy-boundary">
+            <p class="step-label">PRIVACY BOUNDARY</p>
+            <h3>雇主不可存取</h3>
+            <p>完整病歷、移工私人陳述、Grant 管理、正式送件與撤回功能。</p>
+          </article>
+          <article class="panel result-panel">
+            <div class="panel-title"><h3>雇主操作結果</h3><button id="clear-employer-result" class="link-button">清除</button></div>
+            <div id="employer-action-result" class="empty-state">選擇上方一項公司任務開始。</div>
+          </article>
+        </div>
+      </section>
+
       <section id="delegation-tab" class="tab-panel hidden">
         <div class="section-heading">
           <div><p class="step-label">ORGANIZATION → PERSON</p><h3>誰真的有權代表公司？</h3></div>
@@ -100,7 +144,7 @@
 
       <section id="audit-tab" class="tab-panel hidden">
         <div class="section-heading">
-          <div><p class="step-label">APPEND-ONLY EVIDENCE</p><h3>可驗證稽核鏈</h3></div>
+          <div><p class="step-label">APPEND-ONLY EVIDENCE</p><h3>可驗證操作鏈</h3></div>
           <div class="inline-actions"><button id="verify-audit" class="primary">驗證整條鏈</button><button id="tamper-audit" class="secondary">故意竄改一筆</button></div>
         </div>
         <div id="audit-summary" class="audit-summary"></div>

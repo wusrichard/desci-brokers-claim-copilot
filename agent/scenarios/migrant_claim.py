@@ -14,11 +14,10 @@
      沒有金鑰或呼叫失敗時退回固定值，並在回傳的 `source` 欄位標明是哪一種。
      轉人工用**欄位完整性**判斷，不是信心分數門檻。
 
-  ❌ 假的：其餘全部
-     1. 沒有任何密碼學驗證被執行。
-        `MockVerifier` 只是一張查表，回傳「這個 SAID 我認得」。
-        它沒有重算 SAID、沒有驗簽章、沒有走信任鏈、沒有查撤銷紀錄。
-        真正的驗證要換成 `VleiVerifier`，由 vlei-sandbox 執行。
+  ⚠️ 依環境而定：vLEI
+     找到本地 sandbox 時，`VleiVerifier` 會重算 SAID、驗簽章、走信任鏈並查 TEL；
+     demo 模式找不到 sandbox 才退回 MockVerifier。sandbox_strict／production_strict
+     不允許 mock 降級，Verifier 不可用時以 VERIFIER_UNAVAILABLE fail closed。
 
      2. 保障項目清單是人工編寫的示意內容。
         但 `match_coverage()` 的**引用出處是真的**——從本地知識庫
@@ -59,7 +58,7 @@ import os
 from datetime import datetime, timedelta, timezone
 
 from trustagent import knowledge, llm, sandbox_state
-from trustagent import Grant, HIGH, LOW, MockVerifier, Principal, Tool
+from trustagent import Grant, HIGH, LOW, MockVerifier, Principal, Tool, UnavailableVerifier
 
 CASE_ID = "WIC-2026-0826-0117"          # [假資料] 虛構案號
 
@@ -85,9 +84,12 @@ INSURER_LEI = "8945003FUBONLIFE0T38"    # [假資料] 虛構法人，檢查碼�
 #
 # 依「姓名」與「撤銷狀態」查詢，不依位置或字面值，所以誰建的鏈都對得上。
 # 找不到 sandbox 時回傳 None，build_verifier() 會退回 mock 並在畫面標明。
-AGENCY_LE_SAID = sandbox_state.find_by_type("le")
-ECR_ACTIVE = sandbox_state.find_ecr(person="陳美玲", revoked=False)
-ECR_REVOKED = sandbox_state.find_ecr(person="林志豪", revoked=True)
+AGENCY_LE_SAID = sandbox_state.find_by_type("le") or "mock:le:hongtai"
+ECR_ACTIVE = sandbox_state.find_ecr(person="陳美玲", revoked=False) or "mock:ecr:chen-meiling"
+ECR_REVOKED = sandbox_state.find_ecr(person="林志豪", revoked=True) or "mock:ecr:lin-zhihao"
+TAKA_NAME = "Taka"
+TAKA_ROLE = "Migrant Worker Manager"
+TAKA_ECR = sandbox_state.find_ecr(person=TAKA_NAME, revoked=False) or "mock:ecr:taka"
 
 HEALTHPASS_SAID = "EHp0142_healthpass_acdc_said"
 DIAGNOSIS_SAID = "EDiag_0826_acdc_said"
@@ -113,6 +115,10 @@ FIXTURE_NOTES = {
     "build_protection_record": "紀錄內容為固定值；引用的憑證 SAID 亦為假值。",
     "submit_claim": "不會真的送件到任何保險公司，僅回傳一個成功訊息。",
     "read_full_medical_history": "回傳佔位字串，本來就不該被放行。",
+    "confirm_worker_employment": "雇主端聘僱狀態為固定 Demo 資料，尚未連接公司 HR 系統。",
+    "submit_employer_incident_report": "雇主事故報告為固定 Demo 資料，未實際上傳外部系統。",
+    "submit_insurance_enrollment_record": "公司員工保險資料為固定 Demo 資料，未連接真實保險平台。",
+    "track_employer_tasks": "雇主待辦與狀態為固定 Demo 資料，未連接案件管理系統。",
 }
 
 
@@ -376,6 +382,66 @@ def read_full_medical_history():
     return {k: "（假資料佔位值）" for k in LOCAL_ONLY}
 
 
+# ---- 雇主端：公司授權的 Migrant Worker Manager -------------------------
+# 這些工具刻意與移工理賠工具分開。Taka 可以提供公司掌握的聘僱／保險證據，
+# 但不能改寫移工陳述、讀完整病歷或代表移工正式送件。
+
+
+def confirm_worker_employment(case_id=CASE_ID):
+    """確認公司 HR 系統掌握的聘僱關係（Demo 固定資料）。"""
+    return {
+        "case_id": case_id,
+        "worker": "阮氏梅 Nguyen Thi Mai",
+        "employee_number": "MW-2025-0317",
+        "employment_status": "在職",
+        "contract_period": "2025-03-01 → 2028-02-29",
+        "confirmed_by": TAKA_NAME,
+        "manager_role": TAKA_ROLE,
+        "source": "[假資料] 晶宏電子員工保險平台",
+    }
+
+
+def submit_employer_incident_report(case_id=CASE_ID):
+    """提交雇主掌握的事故事實；不覆蓋移工本人的事故陳述。"""
+    return {
+        "case_id": case_id,
+        "report_type": "雇主職業災害事故報告",
+        "incident_time": "2026-08-26 14:20",
+        "workplace": "晶宏電子 3 號 SMT 產線",
+        "employer_statement": "操作 SMT 3 號機台時右手腕遭夾傷，當日送醫並完成內部通報。",
+        "submitted_by": TAKA_NAME,
+        "preserves_worker_statement": True,
+        "source": "[假資料] 雇主事故通報紀錄",
+    }
+
+
+def submit_insurance_enrollment_record(case_id=CASE_ID):
+    """提供公司員工保險平台持有的加保證明（Demo 固定資料）。"""
+    return {
+        "case_id": case_id,
+        "worker": "阮氏梅 Nguyen Thi Mai",
+        "coverage": "雇主團體保險（是否涵蓋本案仍待保險公司審查）",
+        "policy_reference": "JH-GROUP-2026-DEMO",
+        "enrollment_status": "已加保",
+        "effective_period": "2026-01-01 → 2026-12-31",
+        "submitted_by": TAKA_NAME,
+        "source": "[假資料] 晶宏電子員工保險平台",
+    }
+
+
+def track_employer_tasks(case_id=CASE_ID):
+    """只回傳雇主側待辦，不揭露完整醫療或移工私密資料。"""
+    return {
+        "case_id": case_id,
+        "employer_tasks": [
+            {"task": "確認聘僱關係", "status": "已完成"},
+            {"task": "提交事故報告", "status": "待提交"},
+            {"task": "提供加保證明", "status": "待提交"},
+        ],
+        "worker_medical_details_visible": False,
+    }
+
+
 def build_tools():
     return [
         Tool("verify_employment", "1 Verify — 驗證身份與聘僱關係",
@@ -394,6 +460,14 @@ def build_tools():
              "claim_prep", HIGH, submit_claim),
         Tool("read_full_medical_history", "調閱完整病歷（含無關診斷）",
              "full_medical", HIGH, read_full_medical_history),
+        Tool("confirm_worker_employment", "雇主 — 確認聘僱關係",
+             "employment_confirm", LOW, confirm_worker_employment),
+        Tool("submit_employer_incident_report", "雇主 — 提交事故報告",
+             "employer_evidence", LOW, submit_employer_incident_report),
+        Tool("submit_insurance_enrollment_record", "雇主 — 提供員工加保證明",
+             "employer_insurance", LOW, submit_insurance_enrollment_record),
+        Tool("track_employer_tasks", "雇主 — 查看公司端待辦",
+             "case_status_limited", LOW, track_employer_tasks),
     ]
 
 
@@ -439,6 +513,18 @@ def build_agency_officer(revoked=False):
     )
 
 
+def build_employer_officer():
+    """Taka — 由雇主公司以 ECR 授權的 Migrant Worker Manager。"""
+    return Principal(
+        id="employer:taka",
+        display_name=TAKA_NAME,
+        kind="person",
+        acting_for=EMPLOYER_NAME,
+        org_lei=EMPLOYER_LEI,
+        role_credential=TAKA_ECR,
+    )
+
+
 def build_grant(principal, days_valid=90):
     """移工本人的授權：協助理賠，但不含與本次職災無關的病歷。"""
     return Grant(
@@ -461,23 +547,53 @@ def build_agency_grant(principal, days_valid=30):
     )
 
 
+def build_employer_grant(principal, days_valid=30):
+    """雇主案件參與權限：只提供公司端資料，不取得移工的理賠控制權。"""
+    return Grant(
+        id="grant-employer-" + CASE_ID.lower(),
+        principal=principal,
+        purpose="雇主確認聘僱並提供員工保險與事故證據",
+        scopes={
+            "employment_confirm",
+            "employer_evidence",
+            "employer_insurance",
+            "case_status_limited",
+        },
+        expires_at=datetime.now(timezone.utc) + timedelta(days=days_valid),
+    )
+
+
 SANDBOX_DIR = os.path.normpath(
     os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "vlei-sandbox")
 )
 
 
 def build_verifier():
-    """優先使用真正的 vlei-sandbox；找不到才退回 MockVerifier。
+    """依 AGENT_TRUST_MODE 選 verifier；demo 可降級，strict 一律 fail closed。
 
     VleiVerifier 會實際執行 `vlei_sandbox.py verify --said <SAID>`，
     重算 SAID、驗簽章、檢查 LEI 檢查碼、查 TEL 撤銷狀態，並沿 edge 遞迴到信任根。
     退回 mock 時畫面會標明，不會假裝成真的驗證。
     """
-    sandbox_cli = os.path.join(SANDBOX_DIR, "scripts", "vlei_sandbox.py")
-    sandbox_state = os.path.join(SANDBOX_DIR, ".vlei", "state.json")
+    mode = os.environ.get("AGENT_TRUST_MODE", "demo").strip().lower()
+    if mode not in ("demo", "sandbox_strict", "production_strict"):
+        return UnavailableVerifier("AGENT_TRUST_MODE 設定無效")
+
+    if mode == "production_strict":
+        return UnavailableVerifier(
+            "production vLEI verifier 尚未設定；禁止以 sandbox 或 mock 取代"
+        )
+
+    sandbox_dir = os.environ.get("VLEI_SANDBOX_DIR") or SANDBOX_DIR
+    sandbox_cli = os.path.join(sandbox_dir, "scripts", "vlei_sandbox.py")
+    sandbox_state = os.path.join(sandbox_dir, ".vlei", "state.json")
     if os.path.isfile(sandbox_cli) and os.path.isfile(sandbox_state):
         from trustagent import VleiVerifier
-        return VleiVerifier(sandbox_dir=SANDBOX_DIR)
+        return VleiVerifier(sandbox_dir=sandbox_dir)
+    if mode == "sandbox_strict":
+        return UnavailableVerifier(
+            "sandbox CLI 或狀態檔不存在；sandbox_strict 模式拒絕降級"
+        )
     return _build_mock_verifier()
 
 
@@ -495,6 +611,7 @@ def _build_mock_verifier():
     v = MockVerifier()
     v.register(ECR_ACTIVE, "{}（LEI {}）委任之理賠承辦人".format(AGENCY_NAME, AGENCY_LEI))
     v.register(ECR_REVOKED, "{} 前承辦人".format(AGENCY_NAME))
+    v.register(TAKA_ECR, "{} 委任之 {}".format(EMPLOYER_NAME, TAKA_ROLE))
     v.register(HEALTHPASS_SAID, "{} — 職安健檢適任判定".format(HOSPITAL_NAME))
     v.register(DIAGNOSIS_SAID, "{} — 職業傷病診斷書".format(HOSPITAL_NAME))
     v.revoke(ECR_REVOKED)  # 已離職 → 角色憑證撤銷
@@ -508,6 +625,8 @@ SCENARIO = {
     "local_only_fields": LOCAL_ONLY,
     "build_agency_officer": build_agency_officer,
     "build_agency_grant": build_agency_grant,
+    "build_employer_officer": build_employer_officer,
+    "build_employer_grant": build_employer_grant,
     "fixture_notes": FIXTURE_NOTES,
     "all_fixtures": True,  # 本情境所有回傳值皆為固定值
 }
