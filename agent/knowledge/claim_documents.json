@@ -1,0 +1,77 @@
+{
+  "meta": {
+    "kb_version": "2026-08-30",
+    "scope": "勞工職業災害保險——傷病給付與醫療給付。不含商業團保、健保。",
+    "sources": [
+      "勞動部勞工保險局 傷病給付請領手續 https://www.bli.gov.tw/0106065.html",
+      "勞工職業災害保險及保護法 §39（醫療書單由投保單位填發）"
+    ],
+    "note": "文件項目取自勞保局公告的請領手續。responsible 欄位是本清單的重點——六項裡有四項不在移工手上。",
+    "rules": [
+      "responsible 用實際負責方，不要含糊寫「相關單位」",
+      "blocked_fallback 只在法律或勞保局規定明確給出替代路徑時才填，沒有就留空",
+      "查不到的欄位留空，不要編"
+    ]
+  },
+  "benefit": "職災保險傷病給付",
+  "documents": [
+    {
+      "id": "DOC-APPLY",
+      "name": "勞工職業災害保險傷病給付申請書及給付收據",
+      "responsible": "申請人或投保單位",
+      "required": true,
+      "note": "需蓋妥印章",
+      "blocked_fallback": {
+        "when": "投保單位歇業、解散、或其他原因無法蓋章",
+        "action": "勞工可敘明原因，直接向勞保局申請",
+        "basis": "勞保局 傷病給付請領手續"
+      }
+    },
+    {
+      "id": "DOC-DIAG",
+      "name": "傷病診斷書正本",
+      "responsible": "醫師",
+      "required": true,
+      "note": "住院者需註明入出院日期"
+    },
+    {
+      "id": "DOC-MEDSLIP",
+      "name": "職業傷病門診單或住院申請書（醫療書單）",
+      "responsible": "投保單位（雇主）",
+      "required": true,
+      "note": "就醫時使用；醫療給付的前提文件",
+      "blocked_fallback": {
+        "when": "投保單位未依規定填發",
+        "action": "被保險人得向保險人請領，經查明屬實後發給",
+        "basis": "勞工職業災害保險及保護法 第 39 條"
+      }
+    },
+    {
+      "id": "DOC-EMPLOYER-CERT",
+      "name": "雇主證明",
+      "responsible": "投保單位（雇主）",
+      "required": true
+    },
+    {
+      "id": "DOC-ATTENDANCE",
+      "name": "出勤紀錄、請假紀錄、領薪紀錄",
+      "responsible": "投保單位（雇主）",
+      "required": true,
+      "note": "用以認定不能工作期間與投保薪資"
+    },
+    {
+      "id": "DOC-WITNESS",
+      "name": "目擊者證明",
+      "responsible": "申請人",
+      "required": false,
+      "note": "事故經過有爭議時補強用"
+    },
+    {
+      "id": "DOC-COMMUTE",
+      "name": "上下班途中事故陳述書＋道路交通事故當事人登記聯單影本",
+      "responsible": "申請人、警察機關",
+      "required": false,
+      "note": "僅上下班或公出途中事故適用；本案為廠內事故，不適用"
+    }
+  ]
+}

@@ -126,6 +126,29 @@ def load_enrollments():
     }
 
 
+def load_claim_documents():
+    """讀職災保險請領所需文件清單（真實參考資料，取自勞保局公告）。
+
+    跟 enrollments 一樣是「規範」而非「狀態」：這份說的是規定要哪些文件，
+    這個案子實際備齊了哪些則由情境層提供。
+    """
+    path = os.path.join(KB_DIR, "claim_documents.json")
+    if not os.path.exists(path):
+        return {"documents": [], "sha256": "", "version": "尚未建立"}
+    with open(path, "rb") as fh:
+        raw = fh.read()
+    try:
+        data = json.loads(raw.decode("utf-8"))
+    except json.JSONDecodeError:
+        return {"documents": [], "sha256": "", "version": "解析失敗"}
+    return {
+        "documents": data.get("documents", []),
+        "benefit": data.get("benefit", ""),
+        "sha256": hashlib.sha256(raw).hexdigest(),
+        "version": (data.get("meta") or {}).get("kb_version", ""),
+    }
+
+
 def status():
     """給 `run.py kb` 用的摘要。"""
     out = []

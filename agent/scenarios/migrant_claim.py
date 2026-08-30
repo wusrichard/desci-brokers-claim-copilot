@@ -348,18 +348,76 @@ def match_coverage():
     return result
 
 
-def list_missing_documents():
-    """4 Claim — 列出已備與待補文件。
+# [合成] 這個案子目前已經拿到哪些文件。真實版本應讀文件管理系統。
+# 「已請求但對方未回應」是刻意保留的第三種狀態——不是還沒去要，是要了沒下文。
+CASE_DOCUMENTS = {
+    "DOC-DIAG": {"state": "ready", "since": "2026-08-27"},
+    "DOC-ATTENDANCE": {"state": "requested", "since": "2026-08-27"},
+    "DOC-MEDSLIP": {"state": "requested", "since": "2026-08-26"},
+}
 
-    [假資料] 清單為固定值，未與任何文件管理系統核對。
-    真實版本應由已上傳文件與該險種必備文件清單做差集。
+
+def list_missing_documents():
+    """4 Claim — 列出缺件，並標明每一項該去跟誰要。
+
+    範圍限定職災保險（傷病給付與醫療給付），不含商業團保與健保。
+
+    文件清單來自 `knowledge/claim_documents.json`，取自勞保局公告的請領手續——
+    是真實參考資料。這個案子已備哪些則是合成狀態（CASE_DOCUMENTS）。
+
+    這一格的重點不是「你缺什麼」，而是**「你得去跟誰要」**：
+    七項裡有四項不在移工手上。而職災案件最常見的情境，
+    正是雇主與移工的利益相反——所以卡住時的法定後路也一併列出。
     """
-    return {
+    kb = knowledge.load_claim_documents()
+
+    ready, missing, stalled = [], [], []
+    for doc in kb["documents"]:
+        state = CASE_DOCUMENTS.get(doc["id"], {})
+        row = {
+            "name": doc["name"],
+            "responsible": doc["responsible"],
+            "required": doc.get("required", True),
+        }
+        if doc.get("note"):
+            row["note"] = doc["note"]
+
+        if state.get("state") == "ready":
+            row["since"] = state.get("since", "")
+            ready.append(row)
+        elif state.get("state") == "requested":
+            # 已請求但沒下文——這個狀態要留下時間戳，它會流進雇主責任紀錄
+            row["requested_since"] = state.get("since", "")
+            if doc.get("blocked_fallback"):
+                row["fallback"] = doc["blocked_fallback"]
+            stalled.append(row)
+        elif doc.get("required", True):
+            if doc.get("blocked_fallback"):
+                row["fallback"] = doc["blocked_fallback"]
+            missing.append(row)
+
+    by_others = [d for d in (missing + stalled) if "雇主" in d["responsible"] or "醫師" in d["responsible"]]
+
+    result = {
         "case_id": CASE_ID,
-        "ready": ["事故通報單", "出勤紀錄", "健檢適任證明"],
-        "missing": ["職業傷病診斷書正本", "醫療費用收據", "雇主意外事故證明"],
-        "next_action": "請醫院開立職業傷病診斷書",
+        "benefit": kb.get("benefit", ""),
+        "ready": ready,
+        "stalled": stalled,
+        "missing": missing,
+        "not_in_worker_hands": len(by_others),
+        "source": "勞保局請領手續 v{}　sha {}…".format(kb["version"], kb["sha256"][:16]),
     }
+
+    if stalled:
+        oldest = min(s.get("requested_since", "9999") for s in stalled)
+        result["headline"] = (
+            "還缺 {} 項，其中 {} 項不在她手上；最早自 {} 請求後仍無回應".format(
+                len(missing) + len(stalled), len(by_others), oldest)
+        )
+        result["next_action"] = "已請求未回應的項目，可依法定後路直接向勞保局申請"
+    else:
+        result["next_action"] = "備齊後即可送件"
+    return result
 
 
 def track_status():
