@@ -158,4 +158,4 @@ python3 run.py llm        # 驗證金鑰是否生效
 
 ## 團隊
 
-**DeSci Brokers**｜彭彥菱（PM）・吳語復（後端／Agent）・吳映柔（Builder）・沈怡茜（UI/UX）
+**DeSci Brokers**｜Lynn Peng（PM）・吳語復（後端／Agent）・Ying（Builder）・Chirstina（UI/UX）
